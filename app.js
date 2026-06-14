@@ -154,7 +154,6 @@ function validateSetupInputs() {
   const su = S.setup;
   const issues = [];
   if (!su.school.trim()) issues.push("请填写志望校");
-  if (su.school.trim() && isNonsenseText(su.school)) issues.push("志望校看起来像乱填，请认真填写真实学校名");
   return issues;
 }
 
