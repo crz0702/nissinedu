@@ -11,8 +11,24 @@ const Q = {
   // ---- shared / 志望理由書 intake questions ----
   why_japan: {
     id: "why_japan", label: "为什么选择来日本（学习）？", jp: "なぜ日本で学ぶのか",
-    hint: "具体的契机：一次旅行、一部作品、一位创作者、一段经历……越具体越好，别写「从小喜欢日本文化」。",
-    placeholder: "例：高二时看到某位日本作家的个展，被…打动，于是开始…",
+    hint: "不要只写「喜欢日本文化」。写你在中国学习/创作中遇到的瓶颈，以及日本的课程、工房、讲评或研究环境为什么能帮你继续推进。",
+    placeholder: "例：在中国画室训练中我逐渐发现…，而日本美术教育中的…正好能回应这个问题…",
+  },
+  domestic_training: {
+    id: "domestic_training", label: "你在中国的学习 / 训练背景", jp: "中国での学習・制作経験",
+    hint: "高中、艺考、画室、作品集机构、本科课程、老师指导都可以写。重点是你实际做过什么，而不是简单说「基础扎实」。",
+    placeholder: "例：高二开始在…画室系统训练素描、色彩和速写；作品集阶段重点准备了…",
+  },
+  language_preparation: {
+    id: "language_preparation", label: "日语学习和来日准备", jp: "日本語学習・留学準備",
+    hint: "写真实情况：日语学习时间、能否听懂讲评、是否参加过开放校园/说明会/线上咨询。不确定的成绩不要编。",
+    placeholder: "例：从 2024 年开始学习日语，目前能进行日常沟通，也在练习用日语说明作品意图…",
+    optional: true,
+  },
+  cross_cultural_view: {
+    id: "cross_cultural_view", label: "中国经历如何影响你的作品 / 问题意识", jp: "中国での経験と問題意識",
+    hint: "可以写城市、家庭、教育、身体经验、社会观察、地方文化。不要贬低中国，也不要空泛比较中日。",
+    placeholder: "例：我在中国城市更新过程中感受到…，这让我在作品中持续关注…",
   },
   why_school: {
     id: "why_school", label: "为什么是这所大学 / 这个学科？", jp: "本学・本学科を志望する理由",
@@ -60,6 +76,11 @@ const Q = {
     hint: "专业、主要学了什么、本科阶段的代表性研究或作品。",
     placeholder: "例：本科…专业，主攻…，毕业创作是…",
   },
+  graduation_work: {
+    id: "graduation_work", label: "毕业创作 / 毕业论文 / 代表研究", jp: "卒業制作・卒業論文",
+    hint: "大学院申请很容易被追问。写清题目、媒介/方法、核心问题、结论或作品成果。",
+    placeholder: "例：毕业创作《…》以…为主题，使用…媒介，重点探讨…",
+  },
   why_grad: {
     id: "why_grad", label: "为什么读研？为什么来日本读？", jp: "大学院進学・来日の理由",
     hint: "为什么不直接工作 / 不在本国读？日本（这所校）能给你什么别处给不了的？",
@@ -74,6 +95,11 @@ const Q = {
     id: "research_theme", label: "想研究 / 创作的主题方向", jp: "取り組みたい研究・制作テーマ",
     hint: "尽量具体到一个问题或一组作品的构想。这部分与「研究計画書」呼应。",
     placeholder: "例：以…为对象，探讨…；或：围绕…创作一组…",
+  },
+  research_gap: {
+    id: "research_gap", label: "为什么需要到日本继续推进？", jp: "日本で研究・制作を深める必要性",
+    hint: "写日本具体资源如何补足你目前的不足：教授方向、课程、工房、档案、展览环境、批评文化。不要写空泛赞美。",
+    placeholder: "例：我目前的课题需要…方面的指导，而日本在…的实践/研究积累能帮助我…",
   },
   professor: {
     id: "professor", label: "希望师从的教员及理由", jp: "指導を希望する教員とその理由",
@@ -124,13 +150,13 @@ const SHIBO_PROMPTS = {
 function shiboQuestions(level, art) {
   if (level === "ug") {
     return art
-      ? ["why_japan", "why_school", "art_experience", "portfolio", "learn_plan", "future", "self_pr"]
-      : ["why_japan", "why_school", "field_interest", "highschool", "learn_plan", "future", "self_pr"];
+      ? ["why_japan", "domestic_training", "language_preparation", "why_school", "art_experience", "portfolio", "cross_cultural_view", "learn_plan", "future", "self_pr"]
+      : ["why_japan", "domestic_training", "language_preparation", "why_school", "field_interest", "highschool", "cross_cultural_view", "learn_plan", "future", "self_pr"];
   }
   // grad / kenkyusei share grad bank
   return art
-    ? ["grad_background", "why_grad", "why_lab", "research_theme", "professor", "portfolio", "future"]
-    : ["grad_background", "why_grad", "why_lab", "research_theme", "professor", "research_method", "future"];
+    ? ["grad_background", "graduation_work", "why_grad", "research_gap", "why_lab", "research_theme", "professor", "portfolio", "cross_cultural_view", "future"]
+    : ["grad_background", "graduation_work", "why_grad", "research_gap", "why_lab", "research_theme", "professor", "research_method", "cross_cultural_view", "future"];
 }
 
 function shiboPromptKey(level, art) {
