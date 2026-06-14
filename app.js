@@ -55,11 +55,37 @@ function freshState(moduleKey) {
   };
 }
 
-function clampLimit(v, fallback) {
+const JAPAN_LIMIT_RULES = {
+  shibo: {
+    ug: { min: 500, max: 1200, source: "日本の志望理由書要項でよく見られる帯（校ごと差あり）" },
+    grad: { min: 800, max: 1800, source: "大学院進学（志望理由書/志望動機）想定帯" },
+    kenkyusei: { min: 800, max: 1800, source: "研究科志望書想定帯（校ごと差あり）" },
+    default: { min: 500, max: 1500, source: "日本の一般的な志望理由書運用帯" },
+  },
+  kenkyu: {
+    default: { min: 900, max: 1800, source: "日本の研究計画書要件（一般帯）" },
+  },
+};
+
+function getLimitPolicy() {
+  const su = S.setup;
+  const moduleRule = JAPAN_LIMIT_RULES[S.module] || {};
+  const levelRule = moduleRule[su.level] || moduleRule.default;
+  return levelRule || { min: 100, max: 5000, source: "系统默认范围" };
+}
+
+function formatLimitRangeHint(policy) {
+  const min = policy.min;
+  const max = policy.max;
+  const source = policy.source || "日本入試一般要件";
+  return `${source}（${min}〜${max}字）`;
+}
+
+function clampLimit(v, fallback, min = 100, max = 5000) {
   const n = Number.parseInt(v, 10);
   if (!Number.isFinite(n)) return fallback;
-  if (n < 100) return 100;
-  if (n > 5000) return 5000;
+  if (n < min) return min;
+  if (n > max) return max;
   return n;
 }
 
@@ -93,6 +119,14 @@ function materialStats(ids) {
 
 function hasEnoughMaterial(ids) {
   return materialStats(ids).filled >= MIN_MATERIAL_FIELDS;
+}
+
+function validateLimitInRange() {
+  const su = S.setup;
+  const policy = getLimitPolicy();
+  if (su.limit < policy.min) return `字数制限不低于 ${policy.min} 字（日本の要件側）`;
+  if (su.limit > policy.max) return `字数制限不高于 ${policy.max} 字（日本の要件側）`;
+  return "";
 }
 
 function isNonsenseText(v) {
@@ -403,8 +437,13 @@ function renderSetup() {
   }
 
   // 字数 + 语言
+  const policy = getLimitPolicy();
+  su.limit = clampLimit(su.limit, policy.min, policy.min, policy.max);
   panel.appendChild(el("div", { class: "row" },
-    fieldNumber("字数上限", "字数制限", "limit", su.limit, "字"),
+    el("div", { class: "field" },
+      fieldNumber("字数上限", "字数制限", "limit", su.limit, "字", policy.min, policy.max),
+      el("div", { class: "field-hint" }, formatLimitRangeHint(policy))
+    ),
     fieldSelect("输出语言", "出力言語", "lang", su.lang, [
       ["both", "日文 + 中文对照"],
       ["jp", "仅日文"],
@@ -418,8 +457,10 @@ function renderSetup() {
     el("button", { class: "btn btn-primary", disabled: S.busy, onclick: () => {
       if (S.busy) return;
       const issues = validateSetupInputs();
-      if (issues.length) return toast(issues[0], true);
-      setStep("intake");
+        const limitIssue = validateLimitInRange();
+        if (limitIssue) return toast(limitIssue, true);
+        if (issues.length) return toast(issues[0], true);
+        setStep("intake");
     } }, "下一步 · 填素材 →")
   ));
 
@@ -458,17 +499,20 @@ function renderSetup() {
       counter
     );
   }
-  function fieldNumber(label, jp, id, val, unit) {
-    const base = clampLimit(val, MODULES[S.module].defaultLimit);
+  function fieldNumber(label, jp, id, val, unit, min, max) {
+    const lower = Number.isFinite(min) ? min : 100;
+    const upper = Number.isFinite(max) ? max : 5000;
+    const base = clampLimit(val, lower, lower, upper);
     return el("div", { class: "field" },
       labelRow(label, jp, true),
       el("input", {
         type: "number",
         value: base,
-        min: "100",
+        min: String(lower),
+        max: String(upper),
         step: "50",
         oninput: (e) => {
-          su[id] = clampLimit(e.target.value, MODULES[S.module].defaultLimit);
+          su[id] = clampLimit(e.target.value, lower, lower, upper);
         },
       })
     );
@@ -567,6 +611,8 @@ async function doFollowup() {
   const M = MODULES[S.module];
   const su = S.setup;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
+  const limitIssue = validateLimitInRange();
+  if (limitIssue) return toast(limitIssue, true);
   const setupIssues = validateSetupInputs();
   if (setupIssues.length) return toast(setupIssues[0], true);
   const badInputs = validateMaterialInputs(ids);
@@ -639,6 +685,8 @@ async function doGenerate(skipFollowup) {
   const M = MODULES[S.module];
   const su = S.setup;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
+  const limitIssue = validateLimitInRange();
+  if (limitIssue) return toast(limitIssue, true);
   const setupIssues = validateSetupInputs();
   if (setupIssues.length) return toast(setupIssues[0], true);
   const badInputs = validateMaterialInputs(ids);
