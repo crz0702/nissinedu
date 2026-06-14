@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>出願神器 · 日新美術学院</title>
+<meta name="description" content="AI 志望理由書・研究計画書 生成器 — 日新美術学院" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600&family=Noto+Serif+JP:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<canvas id="starfield" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <div class="brand" id="brandHome" role="button" tabindex="0">
+    <span class="brand-mark">日新</span>
+    <span class="brand-text">
+      <span class="brand-zh">出願神器</span>
+      <span class="brand-jp">願書作成 AI</span>
+    </span>
+  </div>
+  <div class="topbar-right" id="topbarStep"></div>
+</header>
+
+<main id="app" class="app"></main>
+
+<footer class="footnote">
+  <span>日新美術学院 · Nissin Art Academy</span>
+  <span class="dot">·</span>
+  <span>素材を整え、真実を語る。捏造はしない。</span>
+</footer>
+
+<!-- toast -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="./templates.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
