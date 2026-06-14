@@ -150,10 +150,24 @@ function isNonsenseText(v) {
   return false;
 }
 
+function isWeakSetupValue(v) {
+  const text = (v || "").trim();
+  if (!text) return false;
+  const clean = text.replace(/\s+/g, "");
+  if (clean.length < 2) return true;
+  if (/^\d+$/.test(clean)) return true;
+  if (/^(.)\1{2,}$/u.test(clean)) return true;
+  if (/^[\W_]+$/.test(clean)) return true;
+  return false;
+}
+
 function validateSetupInputs() {
   const su = S.setup;
   const issues = [];
   if (!su.school.trim()) issues.push("请填写志望校");
+  if (isWeakSetupValue(su.faculty)) issues.push("学部・学科填写不规范，请输入真实名称或常用简称");
+  if (su.major && isWeakSetupValue(su.major)) issues.push("专攻 / 课程填写不规范，请输入真实课程/方向或留空");
+  if (su.professor && isWeakSetupValue(su.professor)) issues.push("指导教员填写不规范，请输入真实导师姓名或留空");
   return issues;
 }
 
