@@ -193,7 +193,7 @@ const MODULES = {
     name: "志望理由書",
     nameZh: "志望理由书",
     nameJp: "しぼうりゆうしょ",
-    desc: "为什么是你、为什么是这所校、为什么是现在 —— 逻辑与情感兼具的核心叙事。按学部 / 大学院 + 美术 / 一般动态出题。",
+    desc: "为什么是你、为什么是这所校、为什么是现在 —— 逻辑与情感兼具的核心叙事。",
     bank: Q,
     getQuestions: shiboQuestions,
     needsProf: true,

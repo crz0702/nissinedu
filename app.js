@@ -247,9 +247,7 @@ function renderHome() {
   const hero = el("div", { class: "hero fade-in" },
     el("div", { class: "hero-eyebrow" }, "Nissin Art Academy"),
     el("h1", { class: "hero-title" }, "出願神器"),
-    el("div", { class: "hero-rule" }),
-    el("p", { class: "hero-sub" },
-      "把你脑子里零散、真实的经历，问出来、整理好、译成地道日文。不替你编故事 —— 编出来的，面接一问就穿帮。")
+    el("div", { class: "hero-rule" })
   );
   app.appendChild(hero);
 
@@ -278,8 +276,6 @@ function renderHome() {
   });
   app.appendChild(grid);
 
-  app.appendChild(el("div", { class: "home-note" },
-    "两个模块共用基本信息 —— 大学院出願通常两份都要。"));
 }
 
 function startModule(key) {
