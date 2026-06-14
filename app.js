@@ -95,6 +95,52 @@ function hasEnoughMaterial(ids) {
   return materialStats(ids).filled >= MIN_MATERIAL_FIELDS;
 }
 
+function isNonsenseText(v) {
+  const text = (v || "").trim();
+  if (!text) return false;
+  if (text.length < 2) return true;
+
+  const clean = text.replace(/\s+/g, "");
+  if (/^(.)\1{3,}$/u.test(clean)) return true;
+  if (/^([0-9])\1{3,}$/u.test(clean)) return true;
+  if (/^[a-z]{3,}$/i.test(clean) && clean.length < 6) return true;
+  if (/^[\W_]+$/u.test(clean)) return true;
+
+  const junk = [
+    "test", "测试", "asdf", "qwer", "aaaa", "bbb", "xxx", "随便", "乱写", "乱填", "null", "undefined",
+    "111111", "123456", "12345", "1111", "aaaaa", "hhhh", "哈哈哈哈"
+  ];
+  const lower = clean.toLowerCase();
+  if (junk.some((w) => lower === w || clean.includes(w))) return true;
+
+  return false;
+}
+
+function validateSetupInputs() {
+  const su = S.setup;
+  const issues = [];
+  if (!su.school.trim()) issues.push("请填写志望校");
+  if (isNonsenseText(su.school)) issues.push("志望校看起来像乱填，请认真填写真实学校名");
+  if (su.faculty && isNonsenseText(su.faculty)) issues.push("学部・研究科信息异常，请认真填写真实信息");
+  if (su.major && isNonsenseText(su.major)) issues.push("专攻／课程信息异常，请认真填写真实信息");
+  if (su.professor && isNonsenseText(su.professor)) issues.push("指导教员信息异常，请认真填写真实信息");
+  return issues;
+}
+
+function validateMaterialInputs(ids) {
+  const M = MODULES[S.module];
+  const bank = M.bank;
+  const issues = [];
+  ids.forEach((qid) => {
+    const q = bank[qid];
+    const a = (S.intake[qid] || "").trim();
+    if (!a) return;
+    if (!isNonsenseText(a)) return;
+    issues.push(q && q.label ? q.label : qid);
+  });
+  return issues;
+}
+
 function onActivate(fn) {
   return (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -371,7 +417,8 @@ function renderSetup() {
     el("div", { class: "spacer" }),
     el("button", { class: "btn btn-primary", disabled: S.busy, onclick: () => {
       if (S.busy) return;
-      if (!su.school.trim()) return toast("请填写志望校", true);
+      const issues = validateSetupInputs();
+      if (issues.length) return toast(issues[0], true);
       setStep("intake");
     } }, "下一步 · 填素材 →")
   ));
@@ -520,6 +567,10 @@ async function doFollowup() {
   const M = MODULES[S.module];
   const su = S.setup;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
+  const setupIssues = validateSetupInputs();
+  if (setupIssues.length) return toast(setupIssues[0], true);
+  const badInputs = validateMaterialInputs(ids);
+  if (badInputs.length) return toast(`发现以下素材像乱填：${badInputs.slice(0, 3).join("、")}，请认真填写真实经历。`, true);
   if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，AI 才能有效追问`, true);
 
   setBusy(true);
@@ -588,6 +639,10 @@ async function doGenerate(skipFollowup) {
   const M = MODULES[S.module];
   const su = S.setup;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
+  const setupIssues = validateSetupInputs();
+  if (setupIssues.length) return toast(setupIssues[0], true);
+  const badInputs = validateMaterialInputs(ids);
+  if (badInputs.length) return toast(`以下素材疑似乱填：${badInputs.slice(0, 3).join("、")}，请先认真补充再成稿。`, true);
   if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，才能生成初稿`, true);
 
   setBusy(true);
