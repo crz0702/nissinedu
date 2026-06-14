@@ -107,6 +107,45 @@ function safeFileName(v) {
   return (v || "draft").trim().replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_").slice(0, 80) || "draft";
 }
 
+const FOLLOWUP_SCHEMA = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      minItems: 1,
+      maxItems: 4,
+      items: {
+        type: "object",
+        properties: {
+          q_cn: { type: "string" },
+          q_jp: { type: "string" },
+          why: { type: "string" },
+        },
+        required: ["q_cn", "q_jp", "why"],
+        propertyOrdering: ["q_cn", "q_jp", "why"],
+      },
+    },
+  },
+  required: ["questions"],
+  propertyOrdering: ["questions"],
+};
+
+const DRAFT_SCHEMA = {
+  type: "object",
+  properties: {
+    jp: { type: "string" },
+    cn: { type: "string" },
+    tips: {
+      type: "array",
+      minItems: 1,
+      maxItems: 5,
+      items: { type: "string" },
+    },
+  },
+  required: ["jp", "cn", "tips"],
+  propertyOrdering: ["jp", "cn", "tips"],
+};
+
 // ---------- starfield ----------
 (function starfield() {
   const c = $("#starfield");
@@ -509,7 +548,7 @@ async function doFollowup() {
     `{"questions":[{"q_cn":"中文问题","q_jp":"日本語の質問","why":"中文：为什么问这个"}]}`;
 
   try {
-    const text = await callAPI(prompt, system);
+    const text = await callAPI(prompt, system, FOLLOWUP_SCHEMA);
     const data = parseJSON(text);
     S.followups = (data.questions || []).slice(0, 4);
     if (S.followups.length === 0) throw new Error("no questions");
@@ -590,7 +629,7 @@ async function doGenerate(skipFollowup) {
     `{"jp":"日本語の${M.name}本文","cn":"中文对照译文（帮助学生理解，并非逐字直译，可意译通顺）","tips":["中文：面接前需要补强/确认的3条建议"]}`;
 
   try {
-    const text = await callAPI(prompt, system);
+    const text = await callAPI(prompt, system, DRAFT_SCHEMA);
     const data = parseJSON(text);
     if (!data.jp) throw new Error("empty");
     S.result = { jp: data.jp, cn: data.cn || "", tips: data.tips || [] };
@@ -694,11 +733,11 @@ function buildContext() {
 }
 
 // ---------- API ----------
-async function callAPI(prompt, system) {
+async function callAPI(prompt, system, schema) {
   const resp = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, system }),
+    body: JSON.stringify({ prompt, system, schema }),
   });
   if (!resp.ok) {
     let msg = `服务错误 ${resp.status}`;

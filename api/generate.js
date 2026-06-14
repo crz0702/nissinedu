@@ -12,6 +12,7 @@
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
 const MAX_TEXT_BYTES = 100_000;
+const MAX_SCHEMA_BYTES = 20_000;
 
 function withTimeout(ms) {
   const ctrl = new AbortController();
@@ -37,7 +38,14 @@ function validatePrompt(prompt, system) {
   return null;
 }
 
-async function callGemini({ system, prompt }) {
+function validateSchema(schema) {
+  if (schema === undefined || schema === null) return null;
+  if (typeof schema !== "object" || Array.isArray(schema)) return "Invalid 'schema'";
+  if (JSON.stringify(schema).length > MAX_SCHEMA_BYTES) return "Schema too large";
+  return null;
+}
+
+async function callGemini({ system, prompt, schema }) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY missing");
 
@@ -50,6 +58,7 @@ async function callGemini({ system, prompt }) {
       responseMimeType: "application/json",
     },
   };
+  if (schema) body.generationConfig.responseSchema = schema;
   if (system) body.systemInstruction = { parts: [{ text: system }] };
 
   const to = withTimeout(45000);
@@ -128,16 +137,21 @@ export default async function handler(req, res) {
     }
   }
 
-  const { prompt, system } = body || {};
+  const { prompt, system, schema } = body || {};
   const invalid = validatePrompt(prompt, system);
   if (invalid) {
     res.status(400).json({ error: invalid });
     return;
   }
+  const invalidSchema = validateSchema(schema);
+  if (invalidSchema) {
+    res.status(400).json({ error: invalidSchema });
+    return;
+  }
 
   const errors = [];
   try {
-    const text = await callGemini({ system, prompt });
+    const text = await callGemini({ system, prompt, schema });
     res.status(200).json({ text, provider: "gemini" });
     return;
   } catch (e) {
