@@ -138,7 +138,7 @@ function isNonsenseText(v) {
   if (/^(.)\1{3,}$/u.test(clean)) return true;
   if (/^([0-9])\1{3,}$/u.test(clean)) return true;
   if (/^[a-z]{3,}$/i.test(clean) && clean.length < 6) return true;
-  if (/^[\W_]+$/u.test(clean)) return true;
+  if (!/[\p{L}\p{N}]/u.test(clean)) return true;
 
   const junk = [
     "test", "测试", "asdf", "qwer", "aaaa", "bbb", "xxx", "随便", "乱写", "乱填", "null", "undefined",
