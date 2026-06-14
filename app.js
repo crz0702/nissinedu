@@ -29,6 +29,8 @@ function toast(msg, isErr = false) {
 
 // ---------- state ----------
 let S = null;
+const MIN_MATERIAL_FIELDS = 2;
+
 function freshState(moduleKey) {
   return {
     module: moduleKey,
@@ -63,6 +65,46 @@ function clampLimit(v, fallback) {
 
 function setBusy(v) {
   if (S) S.busy = v;
+}
+
+function charLen(v) {
+  return Array.from(v || "").length;
+}
+
+function counterNode(value, target = 0) {
+  const n = el("div", { class: "counter", "aria-live": "polite" });
+  updateCounter(n, value, target);
+  return n;
+}
+
+function updateCounter(node, value, target = 0) {
+  const count = charLen(value);
+  node.textContent = target ? `${count} / ${target} 字` : `${count} 字`;
+  node.className = "counter" + (target && count > target * 1.12 ? " over" : count > 0 ? " good" : "");
+}
+
+function materialStats(ids) {
+  const values = ids.map((id) => (S.intake[id] || "").trim()).filter(Boolean);
+  return {
+    filled: values.length,
+    chars: values.reduce((sum, v) => sum + charLen(v), 0),
+  };
+}
+
+function hasEnoughMaterial(ids) {
+  return materialStats(ids).filled >= MIN_MATERIAL_FIELDS;
+}
+
+function onActivate(fn) {
+  return (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    fn(e);
+  };
+}
+
+function safeFileName(v) {
+  return (v || "draft").trim().replace(/[\\/:*?"<>|#%&{}$!'@+`=]/g, "_").slice(0, 80) || "draft";
 }
 
 // ---------- starfield ----------
@@ -112,7 +154,10 @@ function goHome() {
 }
 $("#brandHome").addEventListener("click", goHome);
 $("#brandHome").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") goHome();
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    goHome();
+  }
 });
 
 function setStep(step) {
@@ -178,7 +223,10 @@ function renderHome() {
       tabindex: "0",
       onclick: () => startModule(key),
       onkeydown: (e) => {
-        if (e.key === "Enter" || e.key === " ") startModule(key);
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          startModule(key);
+        }
       },
     },
       el("div", { class: "module-num" }, "0" + (i + 1)),
@@ -258,12 +306,20 @@ function renderSetup() {
     );
     list.forEach((p) => {
       const on = su.prompts.includes(p.q);
-      const c = el("div", { class: "check" + (on ? " on" : ""), onclick: () => {
+      const toggle = () => {
         const i = su.prompts.indexOf(p.q);
         if (i >= 0) su.prompts.splice(i, 1);
         else su.prompts.push(p.q);
         render();
-      } },
+      };
+      const c = el("div", {
+        class: "check" + (on ? " on" : ""),
+        role: "checkbox",
+        tabindex: "0",
+        "aria-checked": on ? "true" : "false",
+        onclick: toggle,
+        onkeydown: onActivate(toggle),
+      },
         el("div", { class: "check-box", html: '<svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#20180a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' }),
         el("div", { class: "check-body" }, el("div", { class: "check-jp", style: "font-size:13px;color:var(--ink)" }, p.q))
       );
@@ -311,16 +367,22 @@ function renderSetup() {
     );
   }
   function fieldArea(label, jp, id, val, hint, optional, big) {
+    const counter = counterNode(val);
+    const ta = el("textarea", {
+      placeholder: "",
+      oninput: (e) => {
+        su[id] = e.target.value;
+        updateCounter(counter, e.target.value);
+      },
+      onblur: bind(id),
+      value: val,
+      style: big ? "min-height:74px" : "",
+    }, val || "");
     return el("div", { class: "field" },
       labelRow(label, jp, !optional),
       hint ? el("div", { class: "field-hint" }, hint) : null,
-      el("textarea", {
-        placeholder: "",
-        oninput: bind(id),
-        onblur: bind(id),
-        value: val,
-        style: big ? "min-height:74px" : "",
-      }, val || "")
+      ta,
+      counter
     );
   }
   function fieldNumber(label, jp, id, val, unit) {
@@ -346,8 +408,15 @@ function renderSetup() {
   function fieldSeg(label, jp, opts, val, onpick) {
     const seg = el("div", { class: "seg" });
     opts.forEach(([v, t, j]) => seg.appendChild(
-      el("div", { class: "seg-opt" + (v === val ? " on" : ""), onclick: () => onpick(v) },
-        t, el("span", { class: "jp" }, j)));
+      el("div", {
+        class: "seg-opt" + (v === val ? " on" : ""),
+        role: "button",
+        tabindex: "0",
+        "aria-pressed": v === val ? "true" : "false",
+        onclick: () => onpick(v),
+        onkeydown: onActivate(() => onpick(v)),
+      },
+        t, el("span", { class: "jp" }, j))));
     return el("div", { class: "field" }, labelRow(label, jp, false), seg);
   }
 }
@@ -372,19 +441,43 @@ function renderIntake() {
     el("div", { class: "step-desc" }, "写事实、写具体，不用组织成文章 —— 那是 AI 的活。越具体，成稿越有说服力。")
   ));
 
+  const meterCount = el("span", { class: "meter-count" });
+  const meterHint = el("span", { class: "meter-hint" });
+  const meter = el("div", { class: "material-meter" }, meterCount, meterHint);
+  let updateMaterialMeter = () => {};
+
   ids.forEach((qid) => {
     const q = bank[qid];
     if (!q) return;
+    const value = S.intake[qid] || "";
+    const counter = counterNode(value);
     const ta = el("textarea", {
       placeholder: q.placeholder || "",
-      oninput: (e) => { S.intake[qid] = e.target.value; },
+      oninput: (e) => {
+        S.intake[qid] = e.target.value;
+        updateCounter(counter, e.target.value);
+        updateMaterialMeter();
+      },
       onblur: (e) => { S.intake[qid] = e.target.value; },
-    }, S.intake[qid] || "");
+    }, value);
     panel.appendChild(el("div", { class: "field" },
       labelRow(q.label, q.jp, !q.optional),
       q.hint ? el("div", { class: "field-hint" }, q.hint) : null,
-      ta));
+      ta,
+      counter));
   });
+
+  updateMaterialMeter = () => {
+    const stats = materialStats(ids);
+    const ready = stats.filled >= MIN_MATERIAL_FIELDS;
+    meter.className = "material-meter" + (ready ? " ready" : "");
+    meterCount.textContent = `${stats.filled}/${ids.length} 项素材`;
+    meterHint.textContent = ready
+      ? `${stats.chars} 字，已可生成`
+      : `至少填写 ${MIN_MATERIAL_FIELDS} 项，再让 AI 追问或成稿`;
+  };
+  updateMaterialMeter();
+  panel.appendChild(meter);
 
   panel.appendChild(el("div", { class: "actions" },
     el("button", { class: "btn btn-ghost", disabled: S.busy, onclick: () => setStep("setup") }, "← 上一步"),
@@ -401,8 +494,7 @@ async function doFollowup() {
   const M = MODULES[S.module];
   const su = S.setup;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
-  const filled = ids.filter((id) => (S.intake[id] || "").trim().length > 0);
-  if (filled.length < 2) return toast("至少填两项素材，AI 才能有效追问", true);
+  if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，AI 才能有效追问`, true);
 
   setBusy(true);
   S.step = "followup";
@@ -421,12 +513,12 @@ async function doFollowup() {
     const data = parseJSON(text);
     S.followups = (data.questions || []).slice(0, 4);
     if (S.followups.length === 0) throw new Error("no questions");
+    setBusy(false);
     render();
   } catch (e) {
+    setBusy(false);
     toast("追问生成失败，可直接成稿：" + (e.message || ""), true);
     setStep("intake");
-  } finally {
-    setBusy(false);
   }
 }
 
@@ -468,10 +560,14 @@ function renderFollowup() {
 async function doGenerate(skipFollowup) {
   if (S.busy) return;
   const M = MODULES[S.module];
+  const su = S.setup;
+  const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
+  if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，才能生成初稿`, true);
+
+  setBusy(true);
   S.step = "result";
   renderLoading("AI 正在撰写…", "对照设问、卡准字数、规避套话");
 
-  const su = S.setup;
   const structure = su.prompts && su.prompts.length
     ? su.prompts.map((p, i) => `${i + 1}. ${p}`).join("\n")
     : "（学生未指定设问，按该类文书的标准结构组织）";
@@ -493,19 +589,18 @@ async function doGenerate(skipFollowup) {
   prompt += `\n次の JSON のみを出力（前後の説明や\`\`\`は不要）：\n` +
     `{"jp":"日本語の${M.name}本文","cn":"中文对照译文（帮助学生理解，并非逐字直译，可意译通顺）","tips":["中文：面接前需要补强/确认的3条建议"]}`;
 
-  setBusy(true);
   try {
     const text = await callAPI(prompt, system);
     const data = parseJSON(text);
     if (!data.jp) throw new Error("empty");
     S.result = { jp: data.jp, cn: data.cn || "", tips: data.tips || [] };
     S.activeTab = "jp";
+    setBusy(false);
     render();
   } catch (e) {
+    setBusy(false);
     toast("生成失败，请重试：" + (e.message || ""), true);
     setStep(S.followups.length ? "followup" : "intake");
-  } finally {
-    setBusy(false);
   }
 }
 
@@ -540,7 +635,7 @@ function renderResult() {
   const body = S.activeTab === "cn" ? r.cn : r.jp;
   const count = Array.from(r.jp || "").length;
   const ratio = count / (su.limit || 1);
-  const badgeClass = ratio > 1.12 ? "badge gold" : ratio > 0.85 ? "badge" : "badge";
+  const badgeClass = ratio > 1.12 ? "badge over" : ratio > 0.85 ? "badge good" : "badge";
   panel.appendChild(el("div", { class: "result-meta" },
     el("span", { class: badgeClass }, `${count} 字 / 上限 ${su.limit}`),
     el("span", { class: "badge" }, su.school || M.name)
@@ -652,6 +747,7 @@ function copy(t) {
     ta.select();
     document.execCommand("copy");
     ta.remove();
+    toast("已复制");
     return;
   }
   navigator.clipboard.writeText(t || "").then(
@@ -665,7 +761,7 @@ function downloadTxt(r) {
   if (r.cn) body += `\n${"-".repeat(28)}\n【中文对照】\n\n${r.cn}\n`;
   const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const a = el("a", { href: url, download: `${M.name}_${S.setup.school || "draft"}.txt` });
+  const a = el("a", { href: url, download: `${M.name}_${safeFileName(S.setup.school)}.txt` });
   document.body.appendChild(a);
   a.click();
   a.remove();

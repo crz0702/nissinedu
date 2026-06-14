@@ -340,6 +340,13 @@ select {
 }
 .seg-opt .jp { display: block; font-family: var(--serif-jp); font-size: 10px; color: var(--ink-3); margin-top: 2px; }
 .seg-opt:hover { border-color: var(--line-strong); }
+.seg-opt:focus-visible,
+.check:focus-visible,
+.result-tab:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
 .seg-opt.on {
   border-color: var(--gold);
   background: linear-gradient(180deg, rgba(230,192,104,0.14), rgba(230,192,104,0.04));
@@ -375,6 +382,30 @@ select {
 .counter { font-size: 11px; color: var(--ink-3); text-align: right; margin-top: 5px; font-variant-numeric: tabular-nums; }
 .counter.over { color: var(--danger); }
 .counter.good { color: var(--teal); }
+
+.material-meter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 22px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(8, 11, 30, 0.38);
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.material-meter.ready {
+  border-color: rgba(111, 208, 189, 0.32);
+  background: rgba(111, 208, 189, 0.06);
+}
+.meter-count {
+  color: var(--gold-soft);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.meter-hint { text-align: right; }
 
 /* ---------- buttons ---------- */
 .actions { display: flex; gap: 12px; margin-top: 26px; align-items: center; }
@@ -461,6 +492,8 @@ select {
   border: 1px solid var(--line-strong); color: var(--ink-2);
 }
 .badge.gold { border-color: var(--gold-deep); color: var(--gold-soft); }
+.badge.good { border-color: rgba(111, 208, 189, 0.5); color: var(--teal); }
+.badge.over { border-color: rgba(232, 138, 138, 0.55); color: var(--danger); }
 .tips { margin-top: 18px; }
 .tips-title { font-size: 12px; color: var(--gold-soft); letter-spacing: 2px; margin-bottom: 10px; font-family: var(--serif-zh); }
 .tip {
@@ -496,4 +529,24 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@media (max-width: 560px) {
+  .actions {
+    flex-wrap: wrap;
+  }
+  .actions .spacer {
+    display: none;
+  }
+  .actions .btn {
+    flex: 1 1 100%;
+    padding-inline: 18px;
+  }
+  .material-meter {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .meter-hint {
+    text-align: left;
+  }
 }
