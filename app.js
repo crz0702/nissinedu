@@ -303,19 +303,12 @@ function renderSetup() {
       ["ug", "学部", "学部"],
       ["grad", "大学院", "大学院"],
       ["kenkyusei", "研究生", "研究生"],
-      ["other", "别科·其他", "別科ほか"],
     ];
     panel.appendChild(fieldSeg("出願区分", "出願区分", levels, su.level, (v) => {
       su.level = v;
       su.prompts = [];
       render();
     }));
-    panel.appendChild(fieldSeg("方向", "系統", [["art", "美术系", "美術系"], ["gen", "一般", "一般"]],
-      su.art ? "art" : "gen", (v) => {
-        su.art = v === "art";
-        su.prompts = [];
-        render();
-      }));
   }
 
   // school / faculty
@@ -361,8 +354,6 @@ function renderSetup() {
       wrap.appendChild(c);
     });
     panel.appendChild(wrap);
-    panel.appendChild(fieldArea("学校设问原题（可选）", "設問原文", "customPrompt", su.customPrompt,
-      "如果学校有特定问法或多个小问，把原文贴这里，AI 会严格照着写。", true, true));
   }
 
   // 字数 + 语言
