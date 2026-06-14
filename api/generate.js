@@ -54,7 +54,7 @@ async function callGemini({ system, prompt, schema }) {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
       responseMimeType: "application/json",
     },
   };
@@ -102,7 +102,7 @@ async function callAnthropic({ system, prompt }) {
       },
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: system || undefined,
         messages: [{ role: "user", content: prompt }],
       }),

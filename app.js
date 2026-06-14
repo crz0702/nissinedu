@@ -108,18 +108,18 @@ function safeFileName(v) {
 }
 
 const FOLLOWUP_SCHEMA = {
-  type: "object",
+  type: "OBJECT",
   properties: {
     questions: {
-      type: "array",
+      type: "ARRAY",
       minItems: 1,
       maxItems: 4,
       items: {
-        type: "object",
+        type: "OBJECT",
         properties: {
-          q_cn: { type: "string" },
-          q_jp: { type: "string" },
-          why: { type: "string" },
+          q_cn: { type: "STRING" },
+          q_jp: { type: "STRING" },
+          why: { type: "STRING" },
         },
         required: ["q_cn", "q_jp", "why"],
         propertyOrdering: ["q_cn", "q_jp", "why"],
@@ -131,15 +131,15 @@ const FOLLOWUP_SCHEMA = {
 };
 
 const DRAFT_SCHEMA = {
-  type: "object",
+  type: "OBJECT",
   properties: {
-    jp: { type: "string" },
-    cn: { type: "string" },
+    jp: { type: "STRING" },
+    cn: { type: "STRING" },
     tips: {
-      type: "array",
+      type: "ARRAY",
       minItems: 1,
       maxItems: 5,
-      items: { type: "string" },
+      items: { type: "STRING" },
     },
   },
   required: ["jp", "cn", "tips"],
