@@ -129,45 +129,73 @@ function validateLimitInRange() {
   return "";
 }
 
-function isNonsenseText(v) {
-  const text = (v || "").trim();
-  if (!text) return false;
-  if (text.length < 2) return true;
+const OFFENSIVE_KEYWORDS = [
+  "fuck", "fucking", "fucked", "shit", "bitch", "bastard", "idiot", "stupid",
+  "asshole", "motherfucker", "f**k", "f*ck", "傻逼", "煞笔", "操你", "他妈", "他媽",
+  "妈的", "你妈", "你娘", "智障", "白痴", "低能", "去死", "日你", "去你妈", "废青", "脑残",
+  "sb", "cnm", "nmsl", "你大爹", "你妈逼", "fuck", "shit", "fuck", "cunt", "retard"
+];
+const TOXIC_PATTERNS = [
+  /\b(你是?傻[逼|b])\b/u,
+  /\b(操你妈|他妈的|狗娘养的)\b/u,
+  /\b(cunt|retard)\b/i,
+];
 
-  const clean = text.replace(/\s+/g, "");
-  if (/^(.)\1{3,}$/u.test(clean)) return true;
-  if (/^([0-9])\1{3,}$/u.test(clean)) return true;
-  if (/^[a-z]{3,}$/i.test(clean) && clean.length < 6) return true;
-  if (!/[\p{L}\p{N}]/u.test(clean)) return true;
+const INPUT_RULES = {
+  setup: {
+    school: { label: "志望校", required: true, minLen: 2, maxLen: 80 },
+    faculty: { label: "学部・学科", required: true, minLen: 2, maxLen: 80 },
+    major: { label: "专攻 / 课程", required: false, minLen: 2, maxLen: 80 },
+    professor: { label: "指导教员", required: false, minLen: 2, maxLen: 50 },
+  },
+  intakeDefault: { label: "回答", required: false, minLen: 2, maxLen: 3000 },
+  followupAnswer: { label: "追问回答", required: false, minLen: 2, maxLen: 2000 },
+};
 
-  const junk = [
-    "test", "测试", "asdf", "qwer", "aaaa", "bbb", "xxx", "随便", "乱写", "乱填", "null", "undefined",
-    "111111", "123456", "12345", "1111", "aaaaa", "hhhh", "哈哈哈哈"
-  ];
-  const lower = clean.toLowerCase();
-  if (junk.some((w) => lower === w || clean.includes(w))) return true;
-
-  return false;
+function hasProfanity(text) {
+  const lower = text.toLowerCase();
+  if (OFFENSIVE_KEYWORDS.some((w) => lower.includes(w))) return true;
+  return TOXIC_PATTERNS.some((p) => p.test(text));
 }
 
-function isWeakSetupValue(v) {
-  const text = (v || "").trim();
-  if (!text) return false;
-  const clean = text.replace(/\s+/g, "");
-  if (clean.length < 2) return true;
-  if (/^\d+$/.test(clean)) return true;
-  if (/^(.)\1{2,}$/u.test(clean)) return true;
-  if (/^[\W_]+$/.test(clean)) return true;
-  return false;
+function validateTextValue(value, rules) {
+  const raw = (value || "").trim();
+  const label = rules.label || "输入";
+  const minLen = Number.isFinite(rules.minLen) ? rules.minLen : 2;
+  const maxLen = Number.isFinite(rules.maxLen) ? rules.maxLen : 3000;
+
+  if (!raw) return rules.required ? `${label}不能为空` : "";
+  if (raw.length < minLen) return `${label}内容过短，请填写具体经历`;
+  if (raw.length > maxLen) return `${label}内容过长，请精简后重写`;
+  if (/^\d+$/.test(raw)) return `${label}不能全是数字`;
+  const compact = raw.replace(/\s+/g, "");
+  if (/^(.)\1{3,}$/u.test(compact)) return `${label}像是乱填（重复字符）`;
+  if (/^\p{N}{2,}$/u.test(compact)) return `${label}不能是重复数字`;
+  if (/^[a-z]{2,}$/i.test(compact) && compact.length < 6) return `${label}像是无意义英文`;
+  if (!/[\p{L}\p{N}]/u.test(compact)) return `${label}请填写可识别文字`;
+  if (hasProfanity(raw)) return `${label}包含不当用语，请修改为正式表述`;
+
+  const suspicious = [
+    "测试", "乱填", "乱写", "随便", "asdf", "qwer", "xxxx", "test", "null", "undefined",
+    "111111", "123456", "12345", "aaaa", "bbbb", "哈哈哈哈"
+  ];
+  const compactLower = compact.toLowerCase();
+  if (suspicious.some((w) => compactLower === w || compact.includes(w))) return `${label}疑似乱填，请认真填写真实信息`;
+
+  return "";
 }
 
 function validateSetupInputs() {
   const su = S.setup;
   const issues = [];
-  if (!su.school.trim()) issues.push("请填写志望校");
-  if (isWeakSetupValue(su.faculty)) issues.push("学部・学科填写不规范，请输入真实名称或常用简称");
-  if (su.major && isWeakSetupValue(su.major)) issues.push("专攻 / 课程填写不规范，请输入真实课程/方向或留空");
-  if (su.professor && isWeakSetupValue(su.professor)) issues.push("指导教员填写不规范，请输入真实导师姓名或留空");
+  const school = validateTextValue(su.school, INPUT_RULES.setup.school);
+  if (school) issues.push(school);
+  const faculty = validateTextValue(su.faculty, INPUT_RULES.setup.faculty);
+  if (faculty) issues.push(faculty);
+  const major = validateTextValue(su.major, INPUT_RULES.setup.major);
+  if (major) issues.push(major);
+  const professor = validateTextValue(su.professor, INPUT_RULES.setup.professor);
+  if (professor) issues.push(professor);
   return issues;
 }
 
@@ -177,10 +205,28 @@ function validateMaterialInputs(ids) {
   const issues = [];
   ids.forEach((qid) => {
     const q = bank[qid];
-    const a = (S.intake[qid] || "").trim();
-    if (!a) return;
-    if (!isNonsenseText(a)) return;
-    issues.push(q && q.label ? q.label : qid);
+    if (!q) return;
+    const label = q.label || qid;
+    const answer = (S.intake[qid] || "").trim();
+    const rules = {
+      ...INPUT_RULES.intakeDefault,
+      label,
+      required: !q.optional,
+      maxLen: q.maxLen || INPUT_RULES.intakeDefault.maxLen,
+    };
+    const issue = validateTextValue(answer, rules);
+    if (issue) issues.push(issue);
+  });
+  return issues;
+}
+
+function validateFollowupAnswers() {
+  const issues = [];
+  S.followups.forEach((f, idx) => {
+    const answer = (S.followupAnswers[idx] || "").trim();
+    if (!answer) return;
+    const issue = validateTextValue(answer, { ...INPUT_RULES.followupAnswer, label: `追问${idx + 1}回答` });
+    if (issue) issues.push(issue);
   });
   return issues;
 }
@@ -626,8 +672,10 @@ async function doFollowup() {
   const setupIssues = validateSetupInputs();
   if (setupIssues.length) return toast(setupIssues[0], true);
   const badInputs = validateMaterialInputs(ids);
-  if (badInputs.length) return toast(`发现以下素材像乱填：${badInputs.slice(0, 3).join("、")}，请认真填写真实经历。`, true);
+  if (badInputs.length) return toast(`以下内容未通过校验：${badInputs.slice(0, 3).join("；")}，请认真填写真实经历。`, true);
   if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，AI 才能有效追问`, true);
+  const followupReadyBad = validateFollowupAnswers();
+  if (followupReadyBad.length) return toast(`追问字段有无效内容：${followupReadyBad.slice(0, 3).join("；")}`, true);
 
   setBusy(true);
   S.step = "followup";
@@ -700,8 +748,10 @@ async function doGenerate(skipFollowup) {
   const setupIssues = validateSetupInputs();
   if (setupIssues.length) return toast(setupIssues[0], true);
   const badInputs = validateMaterialInputs(ids);
-  if (badInputs.length) return toast(`以下素材疑似乱填：${badInputs.slice(0, 3).join("、")}，请先认真补充再成稿。`, true);
+  if (badInputs.length) return toast(`以下输入未通过校验：${badInputs.slice(0, 3).join("；")}，请先认真补充再成稿。`, true);
   if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，才能生成初稿`, true);
+  const followupBad = validateFollowupAnswers();
+  if (followupBad.length) return toast(`追问回答存在问题：${followupBad.slice(0, 3).join("；")}`, true);
 
   setBusy(true);
   S.step = "result";
