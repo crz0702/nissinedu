@@ -154,10 +154,7 @@ function validateSetupInputs() {
   const su = S.setup;
   const issues = [];
   if (!su.school.trim()) issues.push("请填写志望校");
-  if (isNonsenseText(su.school)) issues.push("志望校看起来像乱填，请认真填写真实学校名");
-  if (su.faculty && isNonsenseText(su.faculty)) issues.push("学部・研究科信息异常，请认真填写真实信息");
-  if (su.major && isNonsenseText(su.major)) issues.push("专攻／课程信息异常，请认真填写真实信息");
-  if (su.professor && isNonsenseText(su.professor)) issues.push("指导教员信息异常，请认真填写真实信息");
+  if (su.school.trim() && isNonsenseText(su.school)) issues.push("志望校看起来像乱填，请认真填写真实学校名");
   return issues;
 }
 
