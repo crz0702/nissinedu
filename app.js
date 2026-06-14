@@ -144,11 +144,11 @@ const TOXIC_PATTERNS = [
 const INPUT_RULES = {
   setup: {
     school: { label: "志望校", required: true, minLen: 2, maxLen: 80 },
-    faculty: { label: "学部・学科", required: true, minLen: 2, maxLen: 80 },
-    major: { label: "专攻 / 课程", required: false, minLen: 2, maxLen: 80 },
+    faculty: { label: "学部・学科", required: true, minLen: 2, maxLen: 80, strict: false },
+    major: { label: "专攻 / 课程", required: false, minLen: 2, maxLen: 80, strict: false },
     professor: { label: "指导教员", required: false, minLen: 2, maxLen: 50 },
   },
-  intakeDefault: { label: "回答", required: false, minLen: 2, maxLen: 3000 },
+  intakeDefault: { label: "回答", required: false, minLen: 2, maxLen: 3000, strict: true },
   followupAnswer: { label: "追问回答", required: false, minLen: 2, maxLen: 2000 },
 };
 
@@ -163,6 +163,7 @@ function validateTextValue(value, rules) {
   const label = rules.label || "输入";
   const minLen = Number.isFinite(rules.minLen) ? rules.minLen : 2;
   const maxLen = Number.isFinite(rules.maxLen) ? rules.maxLen : 3000;
+  const strict = rules.strict !== false;
 
   if (!raw) return rules.required ? `${label}不能为空` : "";
   if (raw.length < minLen) return `${label}内容过短，请填写具体经历`;
@@ -171,9 +172,10 @@ function validateTextValue(value, rules) {
   const compact = raw.replace(/\s+/g, "");
   if (/^(.)\1{3,}$/u.test(compact)) return `${label}像是乱填（重复字符）`;
   if (/^\p{N}{2,}$/u.test(compact)) return `${label}不能是重复数字`;
+  if (hasProfanity(raw)) return `${label}包含不当用语，请修改为正式表述`;
+  if (!strict) return "";
   if (/^[a-z]{2,}$/i.test(compact) && compact.length < 6) return `${label}像是无意义英文`;
   if (!/[\p{L}\p{N}]/u.test(compact)) return `${label}请填写可识别文字`;
-  if (hasProfanity(raw)) return `${label}包含不当用语，请修改为正式表述`;
 
   const suspicious = [
     "测试", "乱填", "乱写", "随便", "asdf", "qwer", "xxxx", "test", "null", "undefined",
