@@ -147,8 +147,44 @@ const INPUT_RULES = {
     faculty: { label: "学部・学科", required: true, minLen: 2, maxLen: 80, strict: false },
     major: { label: "专攻 / 课程", required: false, minLen: 2, maxLen: 80, strict: false },
     professor: { label: "指导教员", required: false, minLen: 2, maxLen: 50 },
+    level: { label: "出願区分", required: true, allowed: ["ug", "grad", "kenkyusei"] },
+    lang: { label: "输出语言", required: true, allowed: ["both", "jp"] },
+    prompts: { label: "设问项", required: false, minSelected: 1, maxSelected: 10 },
   },
   intakeDefault: { label: "回答", required: false, minLen: 2, maxLen: 3000, strict: true },
+  intake: {
+    shibo: {
+      why_japan: { label: "为什么选择来日本（学习）？", required: true, minLen: 12, maxLen: 3200, strict: true },
+      domestic_training: { label: "你在中国的学习 / 训练背景", required: true, minLen: 16, maxLen: 3200, strict: true },
+      language_preparation: { label: "日语学习和来日准备", required: false, minLen: 12, maxLen: 2400, strict: true },
+      cross_cultural_view: { label: "中国经历如何影响你的作品 / 问题意识", required: true, minLen: 18, maxLen: 2800, strict: true },
+      why_school: { label: "为什么是这所大学 / 这个学科？", required: true, minLen: 18, maxLen: 3200, strict: true },
+      art_experience: { label: "你的创作 / 学习经历", required: true, minLen: 18, maxLen: 3200, strict: true },
+      portfolio: { label: "最能代表你的 1–2 件作品", required: true, minLen: 16, maxLen: 3200, strict: true },
+      learn_plan: { label: "入学后想学什么 / 想做什么样的创作", required: true, minLen: 16, maxLen: 2800, strict: true },
+      field_interest: { label: "你对这个专业领域的兴趣从何而来？", required: true, minLen: 16, maxLen: 2600, strict: true },
+      highschool: { label: "高中阶段最投入的事 / 取得的成果", required: true, minLen: 14, maxLen: 2600, strict: true },
+      future: { label: "毕业后的目标 / 想从事的方向", required: true, minLen: 12, maxLen: 2200, strict: true },
+      self_pr: { label: "你的特质 / 优势（自我 PR）", required: true, minLen: 12, maxLen: 2400, strict: true },
+      grad_background: { label: "本科 / 既往的学习与创作背景", required: true, minLen: 16, maxLen: 3200, strict: true },
+      graduation_work: { label: "毕业创作 / 毕业论文 / 代表研究", required: true, minLen: 18, maxLen: 3000, strict: true },
+      why_grad: { label: "为什么读研？为什么来日本读？", required: true, minLen: 16, maxLen: 2800, strict: true },
+      why_lab: { label: "为什么这个研究科 / 这个研究室？", required: true, minLen: 16, maxLen: 2800, strict: true },
+      research_theme: { label: "想研究 / 创作的主题方向", required: true, minLen: 14, maxLen: 2800, strict: true },
+      research_gap: { label: "为什么需要到日本继续推进？", required: true, minLen: 18, maxLen: 2600, strict: true },
+      professor: { label: "希望师从的教员及理由", required: false, minLen: 12, maxLen: 2400, strict: true },
+      research_method: { label: "大致的研究方法 / 关心的问题", required: true, minLen: 16, maxLen: 2600, strict: true },
+    },
+    kenkyu: {
+      k_theme: { label: "研究 / 制作主题（暂定题目）", required: true, minLen: 16, maxLen: 3000, strict: true },
+      k_background: { label: "研究背景 / 为什么是这个主题", required: true, minLen: 18, maxLen: 3200, strict: true },
+      k_question: { label: "想厘清的核心问题", required: true, minLen: 16, maxLen: 3000, strict: true },
+      k_prior: { label: "已知的相关研究 / 作家作品", required: false, minLen: 8, maxLen: 2600, strict: true },
+      k_method: { label: "研究 / 制作方法、使用资料", required: true, minLen: 16, maxLen: 3000, strict: true },
+      k_originality: { label: "本研究的独特性 / 意义", required: true, minLen: 12, maxLen: 2600, strict: true },
+      k_schedule: { label: "大致的研究计划安排", required: false, minLen: 8, maxLen: 2200, strict: true },
+    },
+  },
   followupAnswer: { label: "追问回答", required: false, minLen: 2, maxLen: 2000 },
 };
 
@@ -173,23 +209,46 @@ function validateTextValue(value, rules) {
   if (/^(.)\1{3,}$/u.test(compact)) return `${label}像是乱填（重复字符）`;
   if (/^\p{N}{2,}$/u.test(compact)) return `${label}不能是重复数字`;
   if (hasProfanity(raw)) return `${label}包含不当用语，请修改为正式表述`;
-  if (!strict) return "";
-  if (/^[a-z]{2,}$/i.test(compact) && compact.length < 6) return `${label}像是无意义英文`;
-  if (!/[\p{L}\p{N}]/u.test(compact)) return `${label}请填写可识别文字`;
-
   const suspicious = [
     "测试", "乱填", "乱写", "随便", "asdf", "qwer", "xxxx", "test", "null", "undefined",
     "111111", "123456", "12345", "aaaa", "bbbb", "哈哈哈哈"
   ];
   const compactLower = compact.toLowerCase();
   if (suspicious.some((w) => compactLower === w || compact.includes(w))) return `${label}疑似乱填，请认真填写真实信息`;
+  if (!strict) return "";
+  if (/^[a-z]{2,}$/i.test(compact) && compact.length < 6) return `${label}像是无意义英文`;
+  if (!/[\p{L}\p{N}]/u.test(compact)) return `${label}请填写可识别文字`;
 
+  return "";
+}
+
+function validateOptionValue(value, rules) {
+  const label = rules.label || "选项";
+  if (!value) {
+    return rules.required ? `${label}不能为空` : "";
+  }
+  if (rules.allowed && !rules.allowed.includes(value)) return `${label}选择无效`;
+  if (Number.isFinite(rules.minSelected) && Array.isArray(value) && value.length < rules.minSelected) return `${label}至少保留 ${rules.minSelected} 项`;
+  if (Number.isFinite(rules.maxSelected) && Array.isArray(value) && value.length > rules.maxSelected) return `${label}最多只能保留 ${rules.maxSelected} 项`;
   return "";
 }
 
 function validateSetupInputs() {
   const su = S.setup;
   const issues = [];
+  const levelIssue = validateOptionValue(su.level, INPUT_RULES.setup.level);
+  if (levelIssue) issues.push(levelIssue);
+  const langIssue = validateOptionValue(su.lang, INPUT_RULES.setup.lang);
+  if (langIssue) issues.push(langIssue);
+  if (S.module === "shibo") {
+    const promptRule = validateOptionValue(su.prompts, INPUT_RULES.setup.prompts);
+    if (promptRule) issues.push(promptRule);
+    const validPrompts = shiboPromptKey(su.level, su.art);
+    const bank = SHIBO_PROMPTS[validPrompts] || [];
+    const allowed = bank.map((p) => p.q);
+    const extra = (su.prompts || []).find((p) => !allowed.includes(p));
+    if (extra) issues.push(`设问项存在无效选项：${extra}`);
+  }
   const school = validateTextValue(su.school, INPUT_RULES.setup.school);
   if (school) issues.push(school);
   const faculty = validateTextValue(su.faculty, INPUT_RULES.setup.faculty);
@@ -210,11 +269,14 @@ function validateMaterialInputs(ids) {
     if (!q) return;
     const label = q.label || qid;
     const answer = (S.intake[qid] || "").trim();
+    const moduleRules = INPUT_RULES.intake[S.module] || {};
+    const custom = moduleRules[qid] || {};
     const rules = {
       ...INPUT_RULES.intakeDefault,
+      ...custom,
       label,
-      required: !q.optional,
-      maxLen: q.maxLen || INPUT_RULES.intakeDefault.maxLen,
+      required: Object.prototype.hasOwnProperty.call(custom, "required") ? custom.required : !q.optional,
+      maxLen: Number.isFinite(custom.maxLen) ? custom.maxLen : (q.maxLen || INPUT_RULES.intakeDefault.maxLen),
     };
     const issue = validateTextValue(answer, rules);
     if (issue) issues.push(issue);
