@@ -1307,13 +1307,20 @@ function resolveQuestionIdForTextarea(textarea, index, ids) {
   const field = textarea.closest(".field") || textarea.parentElement;
   const direct = [textarea.dataset?.questionId, textarea.id, textarea.name].find((value) => ids.includes(value));
   if (direct) return direct;
+
   const fieldText = field?.innerText || "";
-  const bank = getQuestionBank();
-  const matched = ids.find((id) => {
-    const question = bank?.[id] || {};
-    return (question.label && fieldText.includes(question.label)) || (question.jp && fieldText.includes(question.jp));
-  });
-  return matched || ids[index];
+  const banks = [Q, KENKYU_Q].filter(Boolean);
+  const allIds = banks.flatMap((bank) => Object.keys(bank));
+  const candidates = allIds
+    .map((id) => {
+      const question = Q[id] || KENKYU_Q[id] || {};
+      return { id, label: question.label || "", jp: question.jp || "" };
+    })
+    .sort((a, b) => Math.max(b.label.length, b.jp.length) - Math.max(a.label.length, a.jp.length));
+  const matched = candidates.find(({ label, jp }) => (label && fieldText.includes(label)) || (jp && fieldText.includes(jp)));
+  if (matched) return matched.id;
+
+  return ids[index];
 }
 
 function enhanceAnswerGuides() {
