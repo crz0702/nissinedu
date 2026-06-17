@@ -948,6 +948,18 @@ function buildContext() {
 }
 
 // ---------- API ----------
+function humanizeAPIError(error, detail) {
+  const detailText = Array.isArray(detail) ? detail.join("；") : (detail || "");
+  const combined = `${error || ""} ${detailText}`;
+  if (/quota|rate limit|rate-limits|429/i.test(combined)) {
+    return "AI 额度已用完或触发频率限制。请稍后再试，或请管理员在 Vercel 更新 GEMINI_API_KEY / 配置 ANTHROPIC_API_KEY。";
+  }
+  if (/high demand|UNAVAILABLE|503/i.test(combined)) {
+    return "AI 服务当前繁忙。系统已自动重试但仍失败，请稍后再试。";
+  }
+  return detailText ? `${error} (${detailText})` : error;
+}
+
 async function callAPI(prompt, system, schema) {
   const resp = await fetch("/api/generate", {
     method: "POST",
@@ -958,8 +970,7 @@ async function callAPI(prompt, system, schema) {
     let msg = `服务错误 ${resp.status}`;
     try {
       const e = await resp.json();
-      msg = e.error || msg;
-      if (e.detail) msg += ` (${Array.isArray(e.detail) ? e.detail.join("；") : e.detail})`;
+      msg = humanizeAPIError(e.error || msg, e.detail);
     } catch {}
     throw new Error(msg);
   }
