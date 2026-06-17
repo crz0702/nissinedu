@@ -530,7 +530,7 @@ function renderSetup() {
     if (su.prompts.length === 0) su.prompts = list.filter((p) => p.on).map((p) => p.q);
     const wrap = el("div", { class: "field" },
       el("div", { class: "field-label" }, "设问项 ", el("span", { class: "jp" }, "設問（出力構成）")),
-      el("div", { class: "field-hint" }, "勾选学校实际要求回答的项；不确定就按推荐来。下方也可贴学校原题。")
+      el("div", { class: "field-hint" }, "勾选学校实际要求回答的项；不确定就按推荐来。")
     );
     list.forEach((p) => {
       const on = su.prompts.includes(p.q);
