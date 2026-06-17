@@ -1021,3 +1021,17 @@ select {
 }
 /* USER_REVIEW_REFINEMENTS_END */
 
+/* RESTORE_TOAST_CENTER_START */
+.toast.center {
+  top: 50%;
+  bottom: auto;
+  transform: translateX(-50%) translateY(-46%);
+  border-color: rgba(230, 192, 104, .42);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, .56), 0 0 0 999px rgba(5, 8, 24, .18);
+}
+
+.toast.center.show {
+  transform: translateX(-50%) translateY(-50%);
+}
+/* RESTORE_TOAST_CENTER_END */
+

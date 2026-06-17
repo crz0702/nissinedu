@@ -19,10 +19,10 @@ function el(tag, attrs = {}, ...kids) {
   }
   return n;
 }
-function toast(msg, isErr = false) {
+function toast(msg, isErr = false, options = {}) {
   const t = $("#toast");
   t.textContent = msg;
-  t.className = "toast show" + (isErr ? " err" : "");
+  t.className = "toast show" + (isErr ? " err" : "") + (options.center ? " center" : "");
   clearTimeout(toast._t);
   toast._t = setTimeout(() => (t.className = "toast"), 3200);
 }
@@ -58,7 +58,6 @@ const JAPAN_LIMIT_RULES = {
   shibo: {
     ug: { min: 500, max: 1200, source: "日本の志望理由書要項でよく見られる帯（校ごと差あり）" },
     grad: { min: 800, max: 1800, source: "大学院進学（志望理由書/志望動機）想定帯" },
-    kenkyusei: { min: 800, max: 1800, source: "研究科志望書想定帯（校ごと差あり）" },
     default: { min: 500, max: 1500, source: "日本の一般的な志望理由書運用帯" },
   },
   kenkyu: {
@@ -146,7 +145,7 @@ const INPUT_RULES = {
     faculty: { label: "学部・学科", required: true, minLen: 2, maxLen: 80, strict: false },
     major: { label: "专攻 / 课程", required: false, minLen: 2, maxLen: 80, strict: false },
     professor: { label: "指导教员", required: false, minLen: 2, maxLen: 50 },
-    level: { label: "出願区分", required: true, allowed: ["ug", "grad", "kenkyusei"] },
+    level: { label: "出願区分", required: true, allowed: ["ug", "grad"] },
     lang: { label: "输出语言", required: true, allowed: ["both", "jp"] },
     prompts: { label: "设问项", required: false, minSelected: 1, maxSelected: 10 },
   },
@@ -501,9 +500,8 @@ function renderSetup() {
     const levels = [
       ["ug", "学部", "学部"],
       ["grad", "大学院", "大学院"],
-      ["kenkyusei", "研究生", "研究生"],
     ];
-    panel.appendChild(fieldSeg("出願区分", "出願区分", levels, su.level, (v) => {
+    panel.appendChild(fieldSeg("申请阶段", "出願区分", levels, su.level, (v) => {
       su.level = v;
       su.prompts = [];
       render();
@@ -513,11 +511,11 @@ function renderSetup() {
   // school / faculty
   panel.appendChild(el("div", { class: "row" },
     fieldText("志望校", "大学名", "school", su.school, "例：武蔵野美術大学"),
-    fieldText(isShibo && su.level === "ug" ? "学部・学科" : "研究科・専攻", "学部／研究科", "faculty", su.faculty, "例：造形学部 油絵学科")
+    fieldText(isShibo && su.level === "ug" ? "学部・学科" : "研究科・専攻", isShibo && su.level === "ug" ? "学部・学科" : "研究科・専攻", "faculty", su.faculty, "例：造形学部 油絵学科")
   ));
   panel.appendChild(el("div", { class: "row" },
     fieldText("专攻 / 课程", "コース", "major", su.major, "例：版画 / 选填", true),
-    (S.module === "kenkyu" || (isShibo && (su.level === "grad" || su.level === "kenkyusei")))
+    (S.module === "kenkyu" || (isShibo && su.level === "grad"))
       ? fieldText("希望指导教员", "指導希望教員", "professor", su.professor, "确认过研究方向再填 / 选填", true)
       : el("div")
   ));
@@ -927,7 +925,7 @@ function buildContext() {
   const su = S.setup;
   const bank = M.bank;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
-  const levelMap = { ug: "学部", grad: "大学院", kenkyusei: "研究生", other: "別科・その他" };
+  const levelMap = { ug: "学部", grad: "大学院" };
 
   let out = `【文書種別】${M.name}\n`;
   if (S.module === "shibo") out += `【出願区分】${levelMap[su.level]} / ${su.art ? "美術系" : "一般"}\n`;
@@ -1067,6 +1065,7 @@ function mergeDraftState(moduleKey, saved) {
   merged.followups = Array.isArray(saved.followups) ? saved.followups : [];
   merged.followupAnswers = { ...(saved.followupAnswers || {}) };
   merged.result = saved.result || null;
+  if (!["ug", "grad"].includes(merged.setup?.level)) merged.setup.level = fresh.setup.level;
   if (!["setup", "intake", "followup", "result"].includes(merged.step)) merged.step = "setup";
   return merged;
 }
@@ -1397,7 +1396,7 @@ function installUxEnhancements() {
     if (restored) {
       S = restored;
       render();
-      if (typeof toast === "function") toast("已恢复上次本地草稿");
+      if (typeof toast === "function") toast("已恢复上次本地草稿", false, { center: true });
       return;
     }
     return baseStartModule.apply(this, arguments);

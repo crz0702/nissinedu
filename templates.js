@@ -70,7 +70,7 @@ const Q = {
     hint: "用具体事例支撑，而不是形容词堆砌。「我很努力」不如「我连续两年每天…」。",
     placeholder: "例：我擅长…，曾在…中体现…",
   },
-  // ---- 大学院 / 研究生 specific ----
+  // ---- 大学院 specific ----
   grad_background: {
     id: "grad_background", label: "本科 / 既往的学习与创作背景", jp: "これまでの学習・研究・制作背景",
     hint: "专业、主要学了什么、本科阶段的代表性研究或作品。",
@@ -153,7 +153,7 @@ function shiboQuestions(level, art) {
       ? ["why_japan", "domestic_training", "language_preparation", "why_school", "art_experience", "portfolio", "cross_cultural_view", "learn_plan", "future", "self_pr"]
       : ["why_japan", "domestic_training", "language_preparation", "why_school", "field_interest", "highschool", "cross_cultural_view", "learn_plan", "future", "self_pr"];
   }
-  // grad / kenkyusei share grad bank
+  // grad bank
   return art
     ? ["grad_background", "graduation_work", "why_grad", "research_gap", "why_lab", "research_theme", "professor", "portfolio", "cross_cultural_view", "future"]
     : ["grad_background", "graduation_work", "why_grad", "research_gap", "why_lab", "research_theme", "professor", "research_method", "cross_cultural_view", "future"];
@@ -242,7 +242,7 @@ const ANSWER_GUIDES = {
   },
   grad_background: {
     weak: "本科/过往学习让我有基础。",
-    strong: "写过往专业、毕业作品/论文、课程或实习，说明它与研究生阶段主题的连续关系。"
+    strong: "写过往专业、毕业作品/论文、课程或实习，说明它与大学院阶段主题的连续关系。"
   },
   graduation_work: {
     weak: "毕业作品完成得不错。",
