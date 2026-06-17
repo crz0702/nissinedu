@@ -6,7 +6,8 @@
   "description": "AI 志望理由書・研究計画書 生成器 — 日新美術学院",
   "scripts": {
     "dev": "vercel dev",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "check:rules": "node scripts/check-rules.mjs"
   },
   "engines": {
     "node": ">=18"

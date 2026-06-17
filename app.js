@@ -1024,3 +1024,402 @@ function downloadTxt(r) {
 
 // ---------- boot ----------
 renderHome();
+
+// UX_ENHANCEMENTS_START
+const DRAFT_VERSION = 2;
+const DRAFT_KEY_PREFIX = "shutsugan-shinki:draft:";
+let draftSaveTimer = null;
+let uxEnhancementsInstalled = false;
+
+function storageAvailable() {
+  try {
+    const storage = window.localStorage;
+    const probe = "__nissin_probe__";
+    storage.setItem(probe, "1");
+    storage.removeItem(probe);
+    return storage;
+  } catch {
+    return null;
+  }
+}
+
+function draftKey(moduleKey = S?.module) {
+  return `${DRAFT_KEY_PREFIX}${moduleKey || "unknown"}`;
+}
+
+function safeCloneState(state) {
+  return JSON.parse(JSON.stringify({ ...state, busy: false, error: "" }));
+}
+
+function mergeDraftState(moduleKey, saved) {
+  const fresh = freshState(moduleKey);
+  const merged = { ...fresh, ...saved, busy: false, error: "" };
+  merged.setup = { ...fresh.setup, ...(saved.setup || {}) };
+  merged.materials = { ...fresh.materials, ...(saved.materials || {}) };
+  merged.followups = Array.isArray(saved.followups) ? saved.followups : [];
+  merged.followupAnswers = { ...(saved.followupAnswers || {}) };
+  merged.result = saved.result || null;
+  if (!["setup", "intake", "followup", "result"].includes(merged.step)) merged.step = "setup";
+  return merged;
+}
+
+function loadDraft(moduleKey) {
+  const storage = storageAvailable();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(draftKey(moduleKey));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.version !== DRAFT_VERSION || !parsed.state || parsed.state.module !== moduleKey) return null;
+    return mergeDraftState(moduleKey, parsed.state);
+  } catch {
+    return null;
+  }
+}
+
+function draftMeta(moduleKey) {
+  const storage = storageAvailable();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(draftKey(moduleKey));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatDraftTime(ts) {
+  if (!ts) return "本地自动保存";
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `已保存 ${hh}:${mm}`;
+}
+
+function draftSavedText(savedAt) {
+  const meta = draftMeta(S?.module);
+  return savedAt ? formatDraftTime(savedAt) : formatDraftTime(meta?.savedAt);
+}
+
+function updateSaveStatus(savedAt) {
+  const node = document.getElementById("saveStatus");
+  if (node) node.textContent = draftSavedText(savedAt);
+}
+
+function saveDraftNow() {
+  if (!S || !S.module || S.busy) return;
+  const storage = storageAvailable();
+  if (!storage) return;
+  try {
+    const payload = { version: DRAFT_VERSION, savedAt: Date.now(), state: safeCloneState(S) };
+    storage.setItem(draftKey(S.module), JSON.stringify(payload));
+    updateSaveStatus(payload.savedAt);
+  } catch {
+    updateSaveStatus();
+  }
+}
+
+function scheduleSave() {
+  if (!S || !S.module) return;
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(saveDraftNow, 320);
+}
+
+function clearCurrentDraft() {
+  if (!S?.module) return;
+  const moduleKey = S.module;
+  const storage = storageAvailable();
+  if (storage) storage.removeItem(draftKey(moduleKey));
+  S = freshState(moduleKey);
+  if (typeof toast === "function") toast("本地草稿已清空");
+  render();
+}
+
+function makeUxNode(tag, options = {}, children = []) {
+  const node = document.createElement(tag);
+  if (options.className) node.className = options.className;
+  if (options.text != null) node.textContent = options.text;
+  if (options.html != null) node.innerHTML = options.html;
+  if (options.attrs) Object.entries(options.attrs).forEach(([k, v]) => node.setAttribute(k, v));
+  if (options.onClick) node.addEventListener("click", options.onClick);
+  children.filter(Boolean).forEach((child) => node.appendChild(child));
+  return node;
+}
+
+function getQuestionBank() {
+  return S?.module === "kenkyu" ? KENKYU_Q : Q;
+}
+
+function getActiveQuestionIds() {
+  const M = MODULES?.[S?.module];
+  if (!M) return [];
+  if (typeof M.questions === "function") return M.questions(S.setup || {});
+  if (Array.isArray(M.questions)) return M.questions;
+  if (typeof M.getQuestions === "function") return M.getQuestions(S.setup || {});
+  return [];
+}
+
+function getMaterialRule(qid) {
+  const bank = getQuestionBank();
+  const question = bank?.[qid] || {};
+  const moduleRules = INPUT_RULES?.intake?.[S?.module] || {};
+  const custom = moduleRules[qid] || {};
+  return {
+    ...(INPUT_RULES?.intakeDefault || {}),
+    ...custom,
+    required: custom.required ?? !question.optional,
+    label: question.label || qid
+  };
+}
+
+function answerQuality(qid, value = "") {
+  const rule = getMaterialRule(qid);
+  const raw = value.trim();
+  const len = typeof charLen === "function" ? charLen(raw) : raw.length;
+  if (!raw) {
+    return rule.required
+      ? { level: "warn", text: "待填写：请写真实经历，不要只写关键词。" }
+      : { level: "neutral", text: "可留空；如果有真实素材，补上会更有说服力。" };
+  }
+  if (len < (rule.minLen || 12)) {
+    return { level: "warn", text: `还偏短：至少写到 ${rule.minLen || 12} 字以上，并补具体事实。` };
+  }
+  if (/^(.)\1+$/.test(raw) || /哈哈|呵呵|随便|不知道|无所谓|fuck|shit|傻|滚/i.test(raw)) {
+    return { level: "warn", text: "内容疑似无效或不适合提交，请改成真实经历。" };
+  }
+  if (len < 60) {
+    return { level: "mid", text: "可用，但建议再补时间、作品/课程、问题、修改过程。" };
+  }
+  if (/努力|认真|感兴趣|貴校|環境|学びたい|頑張/i.test(raw) && len < 120) {
+    return { level: "mid", text: "有素材，但套话比例偏高；请补一个具体例子。" };
+  }
+  return { level: "good", text: "细节较充分：生成时更容易写出可信内容。" };
+}
+
+function buildTargetSummaryNode() {
+  if (!S?.module || S.step === "home") return null;
+  const su = S.setup || {};
+  const chips = [
+    su.school || "未填志望校",
+    su.faculty || "未填学部/研究科",
+    su.major ? `专攻：${su.major}` : null,
+    su.professor ? `教员：${su.professor}` : null,
+    `${su.limit || MODULES[S.module].defaultLimit}字`,
+    su.lang === "both" ? "日中对照" : "仅日文"
+  ].filter(Boolean);
+  const chipWrap = makeUxNode("div", { className: "summary-chips" }, chips.map((chip) => makeUxNode("span", { className: "summary-chip", text: chip })));
+  const title = makeUxNode("div", { className: "summary-title", text: MODULES[S.module]?.title || "当前目标" });
+  const copy = makeUxNode("div", { className: "target-copy" }, [title, chipWrap]);
+  const saveTools = makeUxNode("div", { className: "save-tools" }, [
+    makeUxNode("span", { className: "save-status", text: draftSavedText(), attrs: { id: "saveStatus" } }),
+    makeUxNode("button", {
+      className: "mini-link",
+      text: "清空草稿",
+      onClick: () => {
+        if (window.confirm("清空本模块本地草稿，并回到初始填写状态？")) clearCurrentDraft();
+      }
+    })
+  ]);
+  return makeUxNode("section", { className: "target-summary" }, [copy, saveTools]);
+}
+
+function enhanceTargetSummary() {
+  const old = app.querySelector(".target-summary");
+  if (old) old.remove();
+  const node = buildTargetSummaryNode();
+  if (!node) return;
+  const anchor = app.querySelector(".step-head") || app.querySelector(".panel") || app.firstElementChild;
+  if (anchor) anchor.insertAdjacentElement("afterend", node);
+}
+
+function presetValuesForCurrentModule() {
+  const candidates = S?.module === "kenkyu" ? [1200, 1500, 2000, 3000, 4000] : [600, 800, 1000, 1200, 1500];
+  const values = [];
+  candidates.forEach((value) => {
+    let clamped = value;
+    try {
+      clamped = clampLimit(S.module, S.setup?.level, value);
+    } catch {
+      try { clamped = clampLimit(value); } catch { clamped = value; }
+    }
+    if (clamped === value && !values.includes(value)) values.push(value);
+  });
+  return values.length ? values : candidates.slice(0, 4);
+}
+
+function enhanceLimitPresets() {
+  if (S?.step !== "setup") return;
+  const input = app.querySelector('#limit, input[name="limit"], input[type="number"]');
+  if (!input || app.querySelector(".limit-presets")) return;
+  const wrap = makeUxNode("div", { className: "limit-presets" }, presetValuesForCurrentModule().map((value) => makeUxNode("button", {
+    className: Number(S.setup?.limit) === value ? "limit-preset active" : "limit-preset",
+    text: `${value}字`,
+    onClick: () => {
+      S.setup.limit = value;
+      saveDraftNow();
+      render();
+    }
+  })));
+  const field = input.closest(".field") || input.parentElement;
+  if (field) field.appendChild(wrap);
+}
+
+function buildAnswerGuide(qid) {
+  const guide = (typeof ANSWER_GUIDES !== "undefined" && (ANSWER_GUIDES[qid] || ANSWER_GUIDES.default)) || null;
+  if (!guide) return null;
+  return makeUxNode("div", { className: "answer-guide", attrs: { "data-answer-guide": qid } }, [
+    makeUxNode("div", { className: "guide-card weak" }, [
+      makeUxNode("strong", { text: "太空泛" }),
+      makeUxNode("span", { text: guide.weak })
+    ]),
+    makeUxNode("div", { className: "guide-card strong" }, [
+      makeUxNode("strong", { text: "更好写法" }),
+      makeUxNode("span", { text: guide.strong })
+    ])
+  ]);
+}
+
+function updateQualityNote(textarea, qid) {
+  const field = textarea.closest(".field") || textarea.parentElement;
+  if (!field) return;
+  let note = field.querySelector(`[data-quality-note="${qid}"]`);
+  if (!note) {
+    note = makeUxNode("div", { className: "quality-note", attrs: { "data-quality-note": qid } });
+    field.appendChild(note);
+  }
+  const quality = answerQuality(qid, textarea.value || "");
+  note.className = `quality-note ${quality.level}`;
+  note.textContent = quality.text;
+}
+
+function resolveQuestionIdForTextarea(textarea, index, ids) {
+  const field = textarea.closest(".field") || textarea.parentElement;
+  const direct = [textarea.dataset?.questionId, textarea.id, textarea.name].find((value) => ids.includes(value));
+  if (direct) return direct;
+  const fieldText = field?.innerText || "";
+  const bank = getQuestionBank();
+  const matched = ids.find((id) => {
+    const question = bank?.[id] || {};
+    return (question.label && fieldText.includes(question.label)) || (question.jp && fieldText.includes(question.jp));
+  });
+  return matched || ids[index];
+}
+
+function enhanceAnswerGuides() {
+  if (S?.step !== "intake") return;
+  const ids = getActiveQuestionIds();
+  const textareas = Array.from(app.querySelectorAll("textarea"));
+  textareas.forEach((textarea, index) => {
+    const qid = resolveQuestionIdForTextarea(textarea, index, ids);
+    if (!qid) return;
+    textarea.dataset.questionId = qid;
+    const field = textarea.closest(".field") || textarea.parentElement;
+    if (!field) return;
+    field.querySelectorAll(".answer-guide, .quality-note").forEach((node) => node.remove());
+    const guide = buildAnswerGuide(qid);
+    if (guide) field.appendChild(guide);
+    updateQualityNote(textarea, qid);
+  });
+}
+
+function buildFactCheckNode() {
+  const items = [
+    "学校名、学部/研究科、专攻、指导教员已经按募集要项核对。",
+    "作品、奖项、日语成绩、实习经历只保留真实内容。",
+    "没有把“从小喜欢”“贵校环境优越”当作主要理由。",
+    "每一段都能在面试中用中文说明，并能准备对应日语表达。",
+    "字数限制与学校要求一致；提交前再按原题微调。",
+    "中文对照只用于理解，正式提交前以日文原稿为准。"
+  ];
+  return makeUxNode("section", { className: "fact-check" }, [
+    makeUxNode("div", { className: "fact-check-title", text: "提交前 · 事实与面试风险核对" }),
+    makeUxNode("div", { className: "risk-list" }, items.map((item) => makeUxNode("label", { className: "risk-item" }, [
+      makeUxNode("input", { attrs: { type: "checkbox" } }),
+      makeUxNode("span", { text: item })
+    ])))
+  ]);
+}
+
+function enhanceResultChecklist() {
+  if (S?.step !== "result" || app.querySelector(".fact-check")) return;
+  const anchor = app.querySelector(".tips") || app.querySelector(".result-doc") || app.querySelector(".panel");
+  if (anchor) anchor.insertAdjacentElement("afterend", buildFactCheckNode());
+}
+
+function enhanceStickyActions() {
+  app.querySelectorAll(".actions").forEach((node) => node.classList.add("sticky-actions"));
+}
+
+function runUxEnhancements() {
+  if (!app) return;
+  enhanceTargetSummary();
+  enhanceLimitPresets();
+  enhanceAnswerGuides();
+  enhanceResultChecklist();
+  enhanceStickyActions();
+  updateSaveStatus();
+}
+
+function installUxEnhancements() {
+  if (uxEnhancementsInstalled) return;
+  uxEnhancementsInstalled = true;
+
+  const baseRender = render;
+  render = function enhancedRender(...args) {
+    const result = baseRender.apply(this, args);
+    runUxEnhancements();
+    if (S?.module && S.step !== "home") scheduleSave();
+    return result;
+  };
+
+  const baseStartModule = startModule;
+  startModule = function enhancedStartModule(key) {
+    const restored = loadDraft(key);
+    if (restored) {
+      S = restored;
+      render();
+      if (typeof toast === "function") toast("已恢复上次本地草稿");
+      return;
+    }
+    return baseStartModule.apply(this, arguments);
+  };
+
+  const baseSetStep = setStep;
+  setStep = function enhancedSetStep(...args) {
+    const result = baseSetStep.apply(this, args);
+    saveDraftNow();
+    return result;
+  };
+
+  if (typeof doFollowup === "function") {
+    const baseDoFollowup = doFollowup;
+    doFollowup = async function enhancedDoFollowup(...args) {
+      const result = await baseDoFollowup.apply(this, args);
+      saveDraftNow();
+      return result;
+    };
+  }
+
+  if (typeof doGenerate === "function") {
+    const baseDoGenerate = doGenerate;
+    doGenerate = async function enhancedDoGenerate(...args) {
+      const result = await baseDoGenerate.apply(this, args);
+      saveDraftNow();
+      return result;
+    };
+  }
+
+  document.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!S?.module || !target?.matches?.("input, textarea, select")) return;
+    const qid = target.dataset?.questionId;
+    if (qid) updateQualityNote(target, qid);
+    scheduleSave();
+  });
+
+  document.addEventListener("change", () => scheduleSave());
+  render();
+}
+
+installUxEnhancements();
+// UX_ENHANCEMENTS_END
