@@ -23,6 +23,14 @@ function withTimeout(ms) {
   };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryProviderStatus(status) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
 function toErrorText(err, fallback) {
   if (err?.name === "AbortError") return `请求超时 (${fallback})`;
   if (typeof err?.message === "string") return err.message;
@@ -61,29 +69,45 @@ async function callGemini({ system, prompt, schema }) {
   if (schema) body.generationConfig.responseSchema = schema;
   if (system) body.systemInstruction = { parts: [{ text: system }] };
 
-  const to = withTimeout(45000);
-  let resp;
-  try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: to.signal,
-    });
-  } finally {
-    to.done();
+  const maxAttempts = 2;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const to = withTimeout(45000);
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: to.signal,
+      });
+    } catch (err) {
+      lastError = err;
+      throw err;
+    } finally {
+      to.done();
+    }
+
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      const attemptLabel = attempt > 1 ? ` after ${attempt} attempts` : "";
+      lastError = new Error(`Gemini ${resp.status}${attemptLabel}: ${detail.slice(0, 300)}`);
+      if (attempt < maxAttempts && shouldRetryProviderStatus(resp.status)) {
+        await sleep(900 * attempt);
+        continue;
+      }
+      throw lastError;
+    }
+
+    const data = await resp.json();
+    const text = data?.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text || "")
+      .join("");
+    if (!text) throw new Error("Gemini returned empty response");
+    return text;
   }
 
-  if (!resp.ok) {
-    const detail = await resp.text().catch(() => "");
-    throw new Error(`Gemini ${resp.status}: ${detail.slice(0, 300)}`);
-  }
-  const data = await resp.json();
-  const text = data?.candidates?.[0]?.content?.parts
-    ?.map((p) => p.text || "")
-    .join("");
-  if (!text) throw new Error("Gemini returned empty response");
-  return text;
+  throw lastError || new Error("Gemini failed");
 }
 
 async function callAnthropic({ system, prompt }) {
