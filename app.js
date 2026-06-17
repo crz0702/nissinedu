@@ -443,7 +443,7 @@ function constellation() {
 function renderHome() {
   app.innerHTML = "";
   const hero = el("div", { class: "hero fade-in" },
-    el("div", { class: "hero-eyebrow" }, "Nissin Art Academy"),
+    el("div", { class: "hero-eyebrow" }, "www.nissinart.com"),
     el("h1", { class: "hero-title" }, "出願神器"),
     el("div", { class: "hero-rule" })
   );
@@ -667,22 +667,27 @@ function renderIntake() {
   const su = S.setup;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
   const bank = M.bank;
+  const requiredIds = ids.filter((qid) => bank[qid] && !bank[qid].optional);
+  const supplementalIds = ids.filter((qid) => bank[qid]?.optional);
 
   const panel = el("div", { class: "panel fade-in" });
   panel.appendChild(el("div", { class: "step-head" },
     el("div", { class: "step-kicker" }, "Step 02"),
     el("div", { class: "step-title" }, "素材 · 真实经历"),
-    el("div", { class: "step-desc" }, "写事实、写具体，不用组织成文章 —— 那是 AI 的活。越具体，成稿越有说服力。")
+    el("div", { class: "step-desc" }, "先写必填素材，补充素材有真实内容再填。越具体，成稿越像本人。")
   ));
 
   const meterCount = el("span", { class: "meter-count" });
   const meterHint = el("span", { class: "meter-hint" });
   const meter = el("div", { class: "material-meter" }, meterCount, meterHint);
+  const gateHint = el("div", { class: "action-hint" });
+  let directButton;
+  let followButton;
   let updateMaterialMeter = () => {};
 
-  ids.forEach((qid) => {
+  const renderQuestion = (qid) => {
     const q = bank[qid];
-    if (!q) return;
+    if (!q) return null;
     const value = S.intake[qid] || "";
     const counter = counterNode(value);
     const ta = el("textarea", {
@@ -694,12 +699,30 @@ function renderIntake() {
       },
       onblur: (e) => { S.intake[qid] = e.target.value; },
     }, value);
-    panel.appendChild(el("div", { class: "field" },
+    return el("div", { class: "field material-question" },
       labelRow(q.label, q.jp, !q.optional),
       q.hint ? el("div", { class: "field-hint" }, q.hint) : null,
       ta,
-      counter));
-  });
+      counter);
+  };
+
+  const appendQuestionGroup = (title, subtitle, groupIds, optional = false) => {
+    if (!groupIds.length) return;
+    const group = el("section", { class: "material-section" + (optional ? " supplemental" : " required") },
+      el("div", { class: "material-section-head" },
+        el("div", { class: "material-section-title" }, title),
+        el("div", { class: "material-section-sub" }, subtitle)
+      )
+    );
+    groupIds.forEach((qid) => {
+      const node = renderQuestion(qid);
+      if (node) group.appendChild(node);
+    });
+    panel.appendChild(group);
+  };
+
+  appendQuestionGroup("必填素材", `先完成这里的 ${Math.min(MIN_MATERIAL_FIELDS, requiredIds.length || ids.length)} 项以上，再生成会比较稳。`, requiredIds.length ? requiredIds : ids);
+  appendQuestionGroup("补充素材", "有真实经历再写；没有就留空，不要为了填满而编。", supplementalIds, true);
 
   updateMaterialMeter = () => {
     const stats = materialStats(ids);
@@ -708,17 +731,25 @@ function renderIntake() {
     meterCount.textContent = `${stats.filled}/${ids.length} 项素材`;
     meterHint.textContent = ready
       ? `${stats.chars} 字，已可生成`
-      : `至少填写 ${MIN_MATERIAL_FIELDS} 项，再让 AI 追问或成稿`;
+      : `至少填写 ${MIN_MATERIAL_FIELDS} 项真实素材后，才能追问或成稿`;
+    if (directButton) directButton.disabled = S.busy || !ready;
+    if (followButton) followButton.disabled = S.busy || !ready;
+    gateHint.textContent = ready ? "" : `还差 ${Math.max(0, MIN_MATERIAL_FIELDS - stats.filled)} 项真实素材。先补经历，再让 AI 整理。`;
+    gateHint.hidden = ready;
   };
   updateMaterialMeter();
   panel.appendChild(meter);
 
+  directButton = el("button", { class: "btn btn-ghost", disabled: true, onclick: () => doGenerate(true) }, "跳过追问 · 直接成稿");
+  followButton = el("button", { class: "btn btn-primary", disabled: true, onclick: doFollowup }, "AI 追问 →");
   panel.appendChild(el("div", { class: "actions" },
     el("button", { class: "btn btn-ghost", disabled: S.busy, onclick: () => setStep("setup") }, "← 上一步"),
     el("div", { class: "spacer" }),
-    el("button", { class: "btn btn-ghost", disabled: S.busy, onclick: () => doGenerate(true) }, "跳过追问 · 直接成稿"),
-    el("button", { class: "btn btn-primary", disabled: S.busy, onclick: doFollowup }, "AI 追问 →")
+    directButton,
+    followButton
   ));
+  panel.appendChild(gateHint);
+  updateMaterialMeter();
   app.appendChild(panel);
 }
 
@@ -1185,23 +1216,24 @@ function answerQuality(qid, value = "") {
   const len = typeof charLen === "function" ? charLen(raw) : raw.length;
   if (!raw) {
     return rule.required
-      ? { level: "warn", text: "待填写：请写真实经历，不要只写关键词。" }
-      : { level: "neutral", text: "可留空；如果有真实素材，补上会更有说服力。" };
+      ? { level: "warn", text: "这里还缺一段真实经历。写一件具体事：什么时候、做了什么、遇到什么问题。" }
+      : { level: "neutral", text: "这项可以留空。只有真的有素材时再写，不需要硬编。" };
   }
   if (len < (rule.minLen || 12)) {
-    return { level: "warn", text: `还偏短：至少写到 ${rule.minLen || 12} 字以上，并补具体事实。` };
+    return { level: "warn", text: "这还不像一段经历。请补一个具体场景，例如作品、课程、老师反馈或一次修改过程。" };
   }
   if (/^(.)\1+$/.test(raw) || /哈哈|呵呵|随便|不知道|无所谓|fuck|shit|傻|滚/i.test(raw)) {
-    return { level: "warn", text: "内容疑似无效或不适合提交，请改成真实经历。" };
+    return { level: "warn", text: "这段不适合提交。请换成真实学习、作品或研究经历。" };
   }
   if (len < 60) {
-    return { level: "mid", text: "可用，但建议再补时间、作品/课程、问题、修改过程。" };
+    return { level: "mid", text: "方向可以，但还像提纲。再补时间、作品名、具体动作或结果，会更像本人经历。" };
   }
   if (/努力|认真|感兴趣|貴校|環境|学びたい|頑張/i.test(raw) && len < 120) {
-    return { level: "mid", text: "有素材，但套话比例偏高；请补一个具体例子。" };
+    return { level: "mid", text: "有素材，但套话有点多。请用一个真实例子证明，而不是只写态度。" };
   }
-  return { level: "good", text: "细节较充分：生成时更容易写出可信内容。" };
+  return { level: "good", text: "这段有具体信息，可以支撑成稿。提交前再确认事实都能面试说明。" };
 }
+
 
 function buildTargetSummaryNode() {
   if (!S?.module || S.step === "home") return null;

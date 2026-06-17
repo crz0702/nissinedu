@@ -1035,3 +1035,59 @@ select {
 }
 /* RESTORE_TOAST_CENTER_END */
 
+/* MATERIAL_GROUPS_START */
+.material-section {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.material-section + .material-section {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(160, 172, 224, .14);
+}
+
+.material-section-head {
+  display: grid;
+  gap: 5px;
+}
+
+.material-section-title {
+  color: var(--gold);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.material-section-sub,
+.action-hint {
+  color: rgba(238, 240, 251, .68);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.material-question {
+  margin: 0;
+}
+
+.action-hint {
+  margin-top: -4px;
+  text-align: right;
+}
+
+.action-hint[hidden] {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .material-section {
+    gap: 14px;
+  }
+
+  .action-hint {
+    text-align: left;
+    padding: 0 4px;
+  }
+}
+/* MATERIAL_GROUPS_END */
