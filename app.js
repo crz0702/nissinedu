@@ -45,7 +45,6 @@ function freshState(moduleKey) {
       limit: MODULES[moduleKey].defaultLimit,
       lang: "both",
       prompts: [],
-      customPrompt: "",
     },
     intake: {},
     followups: [],
@@ -529,8 +528,8 @@ function renderSetup() {
     const list = SHIBO_PROMPTS[key];
     if (su.prompts.length === 0) su.prompts = list.filter((p) => p.on).map((p) => p.q);
     const wrap = el("div", { class: "field" },
-      el("div", { class: "field-label" }, "设问项 ", el("span", { class: "jp" }, "設問（出力構成）")),
-      el("div", { class: "field-hint" }, "勾选学校实际要求回答的项；不确定就按推荐来。")
+      el("div", { class: "field-label" }, "学校要求你回答哪些内容 ", el("span", { class: "jp" }, "設問構成")),
+      el("div", { class: "field-hint" }, "按募集要项勾选需要回答的内容；不确定就先用推荐项。")
     );
     list.forEach((p) => {
       const on = su.prompts.includes(p.q);
@@ -562,7 +561,7 @@ function renderSetup() {
   panel.appendChild(el("div", { class: "row" },
     el("div", { class: "field" },
       fieldNumber("字数上限", "字数制限", "limit", su.limit, "字", policy.min, policy.max),
-      el("div", { class: "field-hint" }, formatLimitRangeHint(policy))
+      el("div", { class: "field-hint" }, `${S.module === "kenkyu" ? "如果募集要项写 2000 字以内，就选 2000。" : "如果募集要项写 800 字以内，就选 800。"}${formatLimitRangeHint(policy)}`)
     ),
     fieldSelect("输出语言", "出力言語", "lang", su.lang, [
       ["both", "日文 + 中文对照"],
@@ -824,7 +823,6 @@ async function doGenerate(skipFollowup) {
   const structure = su.prompts && su.prompts.length
     ? su.prompts.map((p, i) => `${i + 1}. ${p}`).join("\n")
     : "（学生未指定设问，按该类文书的标准结构组织）";
-  const custom = (su.customPrompt || "").trim();
 
   const system = `あなたは日本の大学出願書類の作成を支援するプロの編集者です。学生本人が提供した素材だけを用いて、自然で説得力のある、審査員に響く日本語の${M.name}を作成します。学生は中国人留学生です。中国での学習・制作・研究経験、日語学習や来日準備、作品集・卒業制作・問題意識から、日本で学ぶ理由と志望校での目標へ自然につなげてください。中国での経験を低く見せたり、日本を空泛に称賛したりせず、留学生としての視点を誠実に表現します。鉄則：(1) 素材にない事実・経験・固有名詞・受賞歴・日語資格・教授との接触を捏造しない。情報が足りない箇所は無理に埋めず、自然に簡潔にする。(2)\u300c私は幼い頃から\u300d、\u300c貴校の充実した環境\u300dなどのありがちな決まり文句や、いかにも AI が書いたような常套句を避ける。(3) 指定の字数と設問構成に従う。字数超過しそうな場合は具体性を保ったまま情報を取捨選択する。(4) 一人の学生の個性・声が滲む文章にする。誇張しない。`;
 
@@ -837,9 +835,8 @@ async function doGenerate(skipFollowup) {
     });
   }
   prompt += `\n\n【出力する設問構成】\n${structure}\n`;
-  if (custom) prompt += `\n【学校の設問原文（最優先で従う）】\n${custom}\n`;
   prompt += `\n【字数】日本語で約 ${su.limit} 字（±10%）。\n`;
-  prompt += `\n【本文形式】設問構成は内容の順序を決めるためのものです。学校の設問原文が分項回答を求めている場合を除き、本文中に「1.」「2.」などの番号見出しを入れず、自然な段落の文章として書いてください。指定字数を超えそうな場合は、素材を全部並べず、志望理由に効く情報を優先して短くまとめてください。\n`;
+  prompt += `\n【本文形式】設問構成は内容の順序を決めるためのものです。本文中に「1.」「2.」などの番号見出しを入れず、自然な段落の文章として書いてください。指定字数を超えそうな場合は、素材を全部並べず、志望理由に効く情報を優先して短くまとめてください。\n`;
   prompt += `\n次の JSON のみを出力（前後の説明や\`\`\`は不要）：\n` +
     `{"jp":"日本語の${M.name}本文","cn":"中文对照译文（帮助学生理解，并非逐字直译，可意译通顺）","tips":["中文：面接前需要补强/确认的3条建议"]}`;
 
@@ -1278,15 +1275,19 @@ function enhanceLimitPresets() {
 function buildAnswerGuide(qid) {
   const guide = (typeof ANSWER_GUIDES !== "undefined" && (ANSWER_GUIDES[qid] || ANSWER_GUIDES.default)) || null;
   if (!guide) return null;
-  return makeUxNode("div", { className: "answer-guide", attrs: { "data-answer-guide": qid } }, [
+  const weakExample = makeUxNode("details", { className: "guide-details" }, [
+    makeUxNode("summary", { text: "查看容易写空泛的例子" }),
     makeUxNode("div", { className: "guide-card weak" }, [
       makeUxNode("strong", { text: "太空泛" }),
       makeUxNode("span", { text: guide.weak })
-    ]),
+    ])
+  ]);
+  return makeUxNode("div", { className: "answer-guide compact", attrs: { "data-answer-guide": qid } }, [
     makeUxNode("div", { className: "guide-card strong" }, [
       makeUxNode("strong", { text: "更好写法" }),
       makeUxNode("span", { text: guide.strong })
-    ])
+    ]),
+    weakExample
   ]);
 }
 

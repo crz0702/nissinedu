@@ -980,3 +980,44 @@ select {
 }
 /* COLOR_FIX_DARK_THEME_END */
 
+/* USER_REVIEW_REFINEMENTS_START */
+.answer-guide.compact {
+  grid-template-columns: 1fr;
+}
+
+.answer-guide.compact .guide-card.strong {
+  border-left: 3px solid rgba(190, 231, 161, .72);
+}
+
+.guide-details {
+  margin-top: -2px;
+}
+
+.guide-details summary {
+  color: rgba(238, 240, 251, .66);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.5;
+  list-style-position: inside;
+  padding: 2px 0;
+}
+
+.guide-details summary:hover {
+  color: var(--gold);
+}
+
+.guide-details .guide-card {
+  margin-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .answer-guide.compact {
+    gap: 8px;
+  }
+
+  .guide-details summary {
+    font-size: 11px;
+  }
+}
+/* USER_REVIEW_REFINEMENTS_END */
+
