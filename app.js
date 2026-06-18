@@ -1377,6 +1377,21 @@ function presetValuesForCurrentModule() {
   return values.length ? values : candidates.slice(0, 4);
 }
 
+function updateLimitUI(value, input) {
+  const limit = Number(value);
+  if (!Number.isFinite(limit)) return;
+  S.setup.limit = limit;
+  if (input) input.value = String(limit);
+  app.querySelectorAll(".limit-preset").forEach((button) => {
+    const active = button.dataset.limit === String(limit);
+    button.classList.toggle("active", active);
+  });
+  const chips = Array.from(app.querySelectorAll(".summary-chip"));
+  const limitChip = chips.find((chip) => /^\d+字$/.test(chip.textContent.trim()));
+  if (limitChip) limitChip.textContent = `${limit}字`;
+  saveDraftNow();
+}
+
 function enhanceLimitPresets() {
   if (S?.step !== "setup") return;
   const input = app.querySelector('#limit, input[name="limit"], input[type="number"]');
@@ -1384,12 +1399,10 @@ function enhanceLimitPresets() {
   const wrap = makeUxNode("div", { className: "limit-presets" }, presetValuesForCurrentModule().map((value) => makeUxNode("button", {
     className: Number(S.setup?.limit) === value ? "limit-preset active" : "limit-preset",
     text: `${value}字`,
-    onClick: () => {
-      S.setup.limit = value;
-      saveDraftNow();
-      render();
-    }
+    attrs: { type: "button", "data-limit": String(value) },
+    onClick: () => updateLimitUI(value, input)
   })));
+  input.addEventListener("input", () => updateLimitUI(input.value, input));
   const field = input.closest(".field") || input.parentElement;
   if (field) field.appendChild(wrap);
 }
