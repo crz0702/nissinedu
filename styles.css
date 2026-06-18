@@ -1091,3 +1091,47 @@ select {
   }
 }
 /* MATERIAL_GROUPS_END */
+
+/* COPY_OPTIONS_REFINEMENT_START */
+.check-cn {
+  margin-top: 3px;
+  color: rgba(238, 240, 251, .62);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.save-tools.draft-empty {
+  display: none;
+}
+
+.mini-link {
+  opacity: .72;
+}
+
+.material-section.supplemental {
+  border-top: 1px solid rgba(160, 172, 224, .14);
+}
+
+.material-section.supplemental > summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.material-section.supplemental > summary:hover .material-section-title {
+  color: #f3d88f;
+}
+
+.material-section-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.material-question:not(.is-focused) .answer-guide {
+  display: none;
+}
+
+.material-question.is-focused .answer-guide {
+  display: grid;
+}
+/* COPY_OPTIONS_REFINEMENT_END */

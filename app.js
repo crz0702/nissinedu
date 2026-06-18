@@ -61,7 +61,7 @@ const JAPAN_LIMIT_RULES = {
     default: { min: 500, max: 1500, source: "日本の一般的な志望理由書運用帯" },
   },
   kenkyu: {
-    default: { min: 900, max: 1800, source: "日本の研究計画書要件（一般帯）" },
+    default: { min: 1000, max: 3000, source: "研究計画書の一般的な字数帯（校ごと差あり）" },
   },
 };
 
@@ -117,6 +117,16 @@ function materialStats(ids) {
 
 function hasEnoughMaterial(ids) {
   return materialStats(ids).filled >= MIN_MATERIAL_FIELDS;
+}
+
+function getCoreMaterialIds(moduleKey, ids, setup = S?.setup || {}) {
+  const wanted = moduleKey === "kenkyu"
+    ? ["k_theme", "k_background", "k_question", "k_method"]
+    : setup.level === "ug"
+      ? ["why_japan", "why_school", setup.art ? "art_experience" : "field_interest", "learn_plan"]
+      : ["grad_background", "why_grad", "why_lab", "research_theme"];
+  const core = wanted.filter((id) => ids.includes(id));
+  return core.length ? core : ids.slice(0, Math.min(4, ids.length));
 }
 
 function validateLimitInRange() {
@@ -261,6 +271,7 @@ function validateSetupInputs() {
 function validateMaterialInputs(ids) {
   const M = MODULES[S.module];
   const bank = M.bank;
+  const coreSet = new Set(getCoreMaterialIds(S.module, ids, S.setup));
   const issues = [];
   ids.forEach((qid) => {
     const q = bank[qid];
@@ -269,11 +280,13 @@ function validateMaterialInputs(ids) {
     const answer = (S.intake[qid] || "").trim();
     const moduleRules = INPUT_RULES.intake[S.module] || {};
     const custom = moduleRules[qid] || {};
+    const required = Object.prototype.hasOwnProperty.call(custom, "required") ? custom.required : coreSet.has(qid);
+    if (!required && !answer) return;
     const rules = {
       ...INPUT_RULES.intakeDefault,
       ...custom,
       label,
-      required: Object.prototype.hasOwnProperty.call(custom, "required") ? custom.required : !q.optional,
+      required,
       maxLen: Number.isFinite(custom.maxLen) ? custom.maxLen : (q.maxLen || INPUT_RULES.intakeDefault.maxLen),
     };
     const issue = validateTextValue(answer, rules);
@@ -483,6 +496,31 @@ function startModule(key) {
 }
 
 // ---------- STEP 1: SETUP ----------
+function promptZh(q) {
+  const map = {
+    "本学・本学科を志望する理由": "为什么选择本校 / 本学科",
+    "これまでの制作・美術活動について": "过往制作 / 美术活动",
+    "入学後に学びたいこと・制作したいもの": "入学后想学和想做的创作",
+    "将来の目標・進路": "毕业后的目标 / 进路",
+    "なぜ日本で学びたいのか": "为什么想在日本学习",
+    "本学・本学部を志望する理由": "为什么选择本校 / 本学部",
+    "高校時代に力を入れたこと": "高中阶段投入最多的事",
+    "入学後の学修計画": "入学后的学习计划",
+    "将来の目標": "未来目标",
+    "自己 PR": "自我优势",
+    "本研究科を志望する理由": "为什么选择本研究科",
+    "これまでの研究・制作活動": "过往研究 / 制作活动",
+    "本学で取り組みたい研究・制作テーマ": "入学后想推进的研究 / 制作主题",
+    "指導を希望する教員とその理由": "希望指导教员及理由",
+    "修了後の進路・目標": "修了后的进路 / 目标",
+    "これまでの研究内容・関心": "过往研究内容 / 关心方向",
+    "入学後の研究計画の概要": "入学后的研究计划概要",
+    "希望指導教員": "希望指导教员",
+    "修了後の展望": "修了后的展望"
+  };
+  return map[q] || "";
+}
+
 function renderSetup() {
   const M = MODULES[S.module];
   const isShibo = S.module === "shibo";
@@ -546,7 +584,7 @@ function renderSetup() {
         onkeydown: onActivate(toggle),
       },
         el("div", { class: "check-box", html: '<svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#20180a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' }),
-        el("div", { class: "check-body" }, el("div", { class: "check-jp", style: "font-size:13px;color:var(--ink)" }, p.q))
+        el("div", { class: "check-body" }, el("div", { class: "check-jp", style: "font-size:13px;color:var(--ink)" }, p.q), promptZh(p.q) ? el("div", { class: "check-cn" }, promptZh(p.q)) : null)
       );
       wrap.appendChild(c);
     });
@@ -559,7 +597,7 @@ function renderSetup() {
   panel.appendChild(el("div", { class: "row" },
     el("div", { class: "field" },
       fieldNumber("字数上限", "字数制限", "limit", su.limit, "字", policy.min, policy.max),
-      el("div", { class: "field-hint" }, `${S.module === "kenkyu" ? "如果募集要项写 2000 字以内，就选 2000。" : "如果募集要项写 800 字以内，就选 800。"}${formatLimitRangeHint(policy)}`)
+      el("div", { class: "field-hint" }, `${S.module === "kenkyu" ? "按募集要项上限选择；没有写就先选 1500。" : "如果募集要项写 800 字以内，就选 800。"}${formatLimitRangeHint(policy)}`)
     ),
     fieldSelect("输出语言", "出力言語", "lang", su.lang, [
       ["both", "日文 + 中文对照"],
@@ -589,6 +627,8 @@ function renderSetup() {
     return el("div", { class: "field" },
       labelRow(label, jp, !optional),
       el("input", {
+        id,
+        name: id,
         type: "text",
         value: val,
         placeholder: ph,
@@ -623,6 +663,8 @@ function renderSetup() {
     return el("div", { class: "field" },
       labelRow(label, jp, true),
       el("input", {
+        id,
+        name: id,
         type: "number",
         value: base,
         min: String(lower),
@@ -635,7 +677,7 @@ function renderSetup() {
     );
   }
   function fieldSelect(label, jp, id, val, opts) {
-    const sel = el("select", { onchange: bind(id), onblur: bind(id) });
+    const sel = el("select", { id, name: id, onchange: bind(id), onblur: bind(id) });
     opts.forEach(([v, t]) => sel.appendChild(el("option", { value: v, ...(v === val ? { selected: "selected" } : {}) }, t)));
     return el("div", { class: "field" }, labelRow(label, jp, false), sel);
   }
@@ -667,14 +709,17 @@ function renderIntake() {
   const su = S.setup;
   const ids = S.module === "shibo" ? M.getQuestions(su.level, su.art) : M.getQuestions();
   const bank = M.bank;
-  const requiredIds = ids.filter((qid) => bank[qid] && !bank[qid].optional);
-  const supplementalIds = ids.filter((qid) => bank[qid]?.optional);
+  const coreIds = getCoreMaterialIds(S.module, ids, su);
+  const coreSet = new Set(coreIds);
+  const supplementalIds = ids.filter((qid) => !coreSet.has(qid));
 
   const panel = el("div", { class: "panel fade-in" });
   panel.appendChild(el("div", { class: "step-head" },
     el("div", { class: "step-kicker" }, "Step 02"),
-    el("div", { class: "step-title" }, "素材 · 真实经历"),
-    el("div", { class: "step-desc" }, "先写必填素材，补充素材有真实内容再填。越具体，成稿越像本人。")
+    el("div", { class: "step-title" }, "素材 · 真实内容"),
+    el("div", { class: "step-desc" }, S.module === "kenkyu"
+      ? "先填研究主题、背景、问题和方法；其他内容有把握再补。"
+      : "先填 2–3 项最有把握的真实素材；其余有内容再补。")
   ));
 
   const meterCount = el("span", { class: "meter-count" });
@@ -691,6 +736,8 @@ function renderIntake() {
     const value = S.intake[qid] || "";
     const counter = counterNode(value);
     const ta = el("textarea", {
+      id: qid,
+      name: qid,
       placeholder: q.placeholder || "",
       oninput: (e) => {
         S.intake[qid] = e.target.value;
@@ -700,7 +747,7 @@ function renderIntake() {
       onblur: (e) => { S.intake[qid] = e.target.value; },
     }, value);
     return el("div", { class: "field material-question" },
-      labelRow(q.label, q.jp, !q.optional),
+      labelRow(q.label, q.jp, coreSet.has(qid)),
       q.hint ? el("div", { class: "field-hint" }, q.hint) : null,
       ta,
       counter);
@@ -708,21 +755,33 @@ function renderIntake() {
 
   const appendQuestionGroup = (title, subtitle, groupIds, optional = false) => {
     if (!groupIds.length) return;
-    const group = el("section", { class: "material-section" + (optional ? " supplemental" : " required") },
+    const body = el("div", { class: "material-section-body" });
+    groupIds.forEach((qid) => {
+      const node = renderQuestion(qid);
+      if (node) body.appendChild(node);
+    });
+    if (optional) {
+      const group = el("details", { class: "material-section supplemental" },
+        el("summary", { class: "material-section-head" },
+          el("span", { class: "material-section-title" }, title),
+          el("span", { class: "material-section-sub" }, subtitle)
+        ),
+        body
+      );
+      panel.appendChild(group);
+      return;
+    }
+    panel.appendChild(el("section", { class: "material-section required" },
       el("div", { class: "material-section-head" },
         el("div", { class: "material-section-title" }, title),
         el("div", { class: "material-section-sub" }, subtitle)
-      )
-    );
-    groupIds.forEach((qid) => {
-      const node = renderQuestion(qid);
-      if (node) group.appendChild(node);
-    });
-    panel.appendChild(group);
+      ),
+      body
+    ));
   };
 
-  appendQuestionGroup("必填素材", `先完成这里的 ${Math.min(MIN_MATERIAL_FIELDS, requiredIds.length || ids.length)} 项以上，再生成会比较稳。`, requiredIds.length ? requiredIds : ids);
-  appendQuestionGroup("补充素材", "有真实经历再写；没有就留空，不要为了填满而编。", supplementalIds, true);
+  appendQuestionGroup("核心素材", "先填 2–3 项最有把握的真实内容；其他题有内容再补。", coreIds);
+  appendQuestionGroup("补充素材", "展开后可补充更多细节；没有真实内容就留空。", supplementalIds, true);
 
   updateMaterialMeter = () => {
     const stats = materialStats(ids);
@@ -731,17 +790,17 @@ function renderIntake() {
     meterCount.textContent = `${stats.filled}/${ids.length} 项素材`;
     meterHint.textContent = ready
       ? `${stats.chars} 字，已可生成`
-      : `至少填写 ${MIN_MATERIAL_FIELDS} 项真实素材后，才能追问或成稿`;
+      : `至少填写 ${MIN_MATERIAL_FIELDS} 项真实内容后，才能追问或成稿`;
     if (directButton) directButton.disabled = S.busy || !ready;
     if (followButton) followButton.disabled = S.busy || !ready;
-    gateHint.textContent = ready ? "" : `还差 ${Math.max(0, MIN_MATERIAL_FIELDS - stats.filled)} 项真实素材。先补经历，再让 AI 整理。`;
+    gateHint.textContent = ready ? "" : `还差 ${Math.max(0, MIN_MATERIAL_FIELDS - stats.filled)} 项真实内容。先补素材，再让 AI 整理。`;
     gateHint.hidden = ready;
   };
   updateMaterialMeter();
   panel.appendChild(meter);
 
-  directButton = el("button", { class: "btn btn-ghost", disabled: true, onclick: () => doGenerate(true) }, "跳过追问 · 直接成稿");
-  followButton = el("button", { class: "btn btn-primary", disabled: true, onclick: doFollowup }, "AI 追问 →");
+  directButton = el("button", { class: "btn btn-ghost", disabled: true, onclick: () => doGenerate(true) }, "直接生成初稿");
+  followButton = el("button", { class: "btn btn-primary", disabled: true, onclick: doFollowup }, "先让 AI 追问");
   panel.appendChild(el("div", { class: "actions" },
     el("button", { class: "btn btn-ghost", disabled: S.busy, onclick: () => setStep("setup") }, "← 上一步"),
     el("div", { class: "spacer" }),
@@ -1126,6 +1185,15 @@ function draftMeta(moduleKey) {
   }
 }
 
+function stateHasDraftContent(state = S) {
+  if (!state) return false;
+  const su = state.setup || {};
+  const setupText = [su.school, su.faculty, su.major, su.professor].some((v) => String(v || "").trim());
+  const intakeText = Object.values(state.intake || {}).some((v) => String(v || "").trim());
+  const followText = Object.values(state.followupAnswers || {}).some((v) => String(v || "").trim());
+  return setupText || intakeText || followText || !!state.result;
+}
+
 function formatDraftTime(ts) {
   if (!ts) return "本地自动保存";
   const d = new Date(ts);
@@ -1135,19 +1203,28 @@ function formatDraftTime(ts) {
 }
 
 function draftSavedText(savedAt) {
+  if (!stateHasDraftContent(S)) return "";
   const meta = draftMeta(S?.module);
   return savedAt ? formatDraftTime(savedAt) : formatDraftTime(meta?.savedAt);
 }
 
 function updateSaveStatus(savedAt) {
   const node = document.getElementById("saveStatus");
-  if (node) node.textContent = draftSavedText(savedAt);
+  if (!node) return;
+  const text = draftSavedText(savedAt);
+  node.textContent = text;
+  node.closest(".save-tools")?.classList.toggle("draft-empty", !text);
 }
 
 function saveDraftNow() {
   if (!S || !S.module || S.busy) return;
   const storage = storageAvailable();
   if (!storage) return;
+  if (!stateHasDraftContent(S)) {
+    try { storage.removeItem(draftKey(S.module)); } catch {}
+    updateSaveStatus();
+    return;
+  }
   try {
     const payload = { version: DRAFT_VERSION, savedAt: Date.now(), state: safeCloneState(S) };
     storage.setItem(draftKey(S.module), JSON.stringify(payload));
@@ -1214,24 +1291,37 @@ function answerQuality(qid, value = "") {
   const rule = getMaterialRule(qid);
   const raw = value.trim();
   const len = typeof charLen === "function" ? charLen(raw) : raw.length;
+  const isResearchPlan = S?.module === "kenkyu";
+  const emptyText = isResearchPlan
+    ? "这里还缺研究内容。请补研究对象、方法、资料或具体问题。"
+    : "这里还缺一段真实经历。写一件具体事：什么时候、做了什么、遇到什么问题。";
+  const shortText = isResearchPlan
+    ? "这还不像研究素材。请补研究对象、调查方法、参考资料或你想验证的问题。"
+    : "这还不像一段经历。请补一个具体场景，例如作品、课程、老师反馈或一次修改过程。";
+  const midText = isResearchPlan
+    ? "方向可以，但还偏像题目。再补对象、样本、方法或预期成果，会更像研究计划。"
+    : "方向可以，但还像提纲。再补时间、作品名、具体动作或结果，会更像本人经历。";
+  const goodText = isResearchPlan
+    ? "这段有研究信息，可以支撑计划书。提交前再确认资料和方法是否说得清。"
+    : "这段有具体信息，可以支撑成稿。提交前再确认事实都能面试说明。";
   if (!raw) {
     return rule.required
-      ? { level: "warn", text: "这里还缺一段真实经历。写一件具体事：什么时候、做了什么、遇到什么问题。" }
+      ? { level: "warn", text: emptyText }
       : { level: "neutral", text: "这项可以留空。只有真的有素材时再写，不需要硬编。" };
   }
   if (len < (rule.minLen || 12)) {
-    return { level: "warn", text: "这还不像一段经历。请补一个具体场景，例如作品、课程、老师反馈或一次修改过程。" };
+    return { level: "warn", text: shortText };
   }
   if (/^(.)\1+$/.test(raw) || /哈哈|呵呵|随便|不知道|无所谓|fuck|shit|傻|滚/i.test(raw)) {
-    return { level: "warn", text: "这段不适合提交。请换成真实学习、作品或研究经历。" };
+    return { level: "warn", text: "这段不适合提交。请换成真实学习、作品或研究内容。" };
   }
   if (len < 60) {
-    return { level: "mid", text: "方向可以，但还像提纲。再补时间、作品名、具体动作或结果，会更像本人经历。" };
+    return { level: "mid", text: midText };
   }
   if (/努力|认真|感兴趣|貴校|環境|学びたい|頑張/i.test(raw) && len < 120) {
     return { level: "mid", text: "有素材，但套话有点多。请用一个真实例子证明，而不是只写态度。" };
   }
-  return { level: "good", text: "这段有具体信息，可以支撑成稿。提交前再确认事实都能面试说明。" };
+  return { level: "good", text: goodText };
 }
 
 
@@ -1249,11 +1339,12 @@ function buildTargetSummaryNode() {
   const chipWrap = makeUxNode("div", { className: "summary-chips" }, chips.map((chip) => makeUxNode("span", { className: "summary-chip", text: chip })));
   const title = makeUxNode("div", { className: "summary-title", text: MODULES[S.module]?.title || "当前目标" });
   const copy = makeUxNode("div", { className: "target-copy" }, [title, chipWrap]);
-  const saveTools = makeUxNode("div", { className: "save-tools" }, [
-    makeUxNode("span", { className: "save-status", text: draftSavedText(), attrs: { id: "saveStatus" } }),
+  const saveText = draftSavedText();
+  const saveTools = makeUxNode("div", { className: "save-tools" + (saveText ? "" : " draft-empty") }, [
+    makeUxNode("span", { className: "save-status", text: saveText, attrs: { id: "saveStatus" } }),
     makeUxNode("button", {
       className: "mini-link",
-      text: "清空草稿",
+      text: "清空",
       onClick: () => {
         if (window.confirm("清空本模块本地草稿，并回到初始填写状态？")) clearCurrentDraft();
       }
@@ -1272,7 +1363,7 @@ function enhanceTargetSummary() {
 }
 
 function presetValuesForCurrentModule() {
-  const candidates = S?.module === "kenkyu" ? [1200, 1500, 2000, 3000, 4000] : [600, 800, 1000, 1200, 1500];
+  const candidates = S?.module === "kenkyu" ? [1000, 1500, 2000, 3000] : [600, 800, 1000, 1200, 1500];
   const values = [];
   candidates.forEach((value) => {
     let clamped = value;
@@ -1368,6 +1459,9 @@ function enhanceAnswerGuides() {
     field.querySelectorAll(".answer-guide, .quality-note").forEach((node) => node.remove());
     const guide = buildAnswerGuide(qid);
     if (guide) field.appendChild(guide);
+    field.classList.toggle("is-focused", document.activeElement === textarea);
+    textarea.addEventListener("focus", () => field.classList.add("is-focused"));
+    textarea.addEventListener("blur", () => field.classList.remove("is-focused"));
     updateQualityNote(textarea, qid);
   });
 }
