@@ -76,6 +76,7 @@ function formatLimitRangeHint(policy) {
   const min = policy.min;
   const max = policy.max;
   const source = policy.source || "日本入試一般要件";
+  if (S?.module === "kenkyu") return `${source}（${min}〜${max}字）。募集要項に指定がなければ、まず 1500〜2000 字で作るのが無難です。`;
   return `${source}（${min}〜${max}字）`;
 }
 
@@ -121,7 +122,7 @@ function hasEnoughMaterial(ids) {
 
 function getCoreMaterialIds(moduleKey, ids, setup = S?.setup || {}) {
   const wanted = moduleKey === "kenkyu"
-    ? ["k_theme", "k_background", "k_question", "k_method"]
+    ? ["k_theme", "k_background", "k_question", "k_method", "k_current_result"]
     : setup.level === "ug"
       ? ["why_japan", "why_school", setup.art ? "art_experience" : "field_interest", "learn_plan"]
       : ["grad_background", "why_grad", "why_lab", "research_theme"];
@@ -189,7 +190,8 @@ const INPUT_RULES = {
       k_question: { label: "想厘清的核心问题", required: true, minLen: 16, maxLen: 3000, strict: true },
       k_prior: { label: "已知的相关研究 / 作家作品", required: false, minLen: 8, maxLen: 2600, strict: true },
       k_method: { label: "研究 / 制作方法、使用资料", required: true, minLen: 16, maxLen: 3000, strict: true },
-      k_originality: { label: "本研究的独特性 / 意义", required: true, minLen: 12, maxLen: 2600, strict: true },
+      k_current_result: { label: "目前已有的作品 / 调查 / 研究成果", required: true, minLen: 12, maxLen: 3000, strict: true },
+      k_originality: { label: "期待成果 / 独特性 / 意义", required: true, minLen: 12, maxLen: 2600, strict: true },
       k_schedule: { label: "大致的研究计划安排", required: false, minLen: 8, maxLen: 2200, strict: true },
     },
   },
@@ -280,7 +282,7 @@ function validateMaterialInputs(ids) {
     const answer = (S.intake[qid] || "").trim();
     const moduleRules = INPUT_RULES.intake[S.module] || {};
     const custom = moduleRules[qid] || {};
-    const required = Object.prototype.hasOwnProperty.call(custom, "required") ? custom.required : coreSet.has(qid);
+    const required = false;
     if (!required && !answer) return;
     const rules = {
       ...INPUT_RULES.intakeDefault,
@@ -718,7 +720,7 @@ function renderIntake() {
     el("div", { class: "step-kicker" }, "Step 02"),
     el("div", { class: "step-title" }, "素材 · 真实内容"),
     el("div", { class: "step-desc" }, S.module === "kenkyu"
-      ? "先填研究主题、背景、问题和方法；其他内容有把握再补。"
+      ? "先填主题、背景、问题、方法和已有成果；其余内容有把握再补。"
       : "先填 2–3 项最有把握的真实素材；其余有内容再补。")
   ));
 
@@ -780,20 +782,21 @@ function renderIntake() {
     ));
   };
 
-  appendQuestionGroup("核心素材", "先填 2–3 项最有把握的真实内容；其他题有内容再补。", coreIds);
+  appendQuestionGroup("核心素材", "带 ＊ 的题请优先填；至少先完成 2 项，AI 会把不足处列入追问。", coreIds);
   appendQuestionGroup("补充素材", "展开后可补充更多细节；没有真实内容就留空。", supplementalIds, true);
 
   updateMaterialMeter = () => {
     const stats = materialStats(ids);
-    const ready = stats.filled >= MIN_MATERIAL_FIELDS;
+    const coreStats = materialStats(coreIds);
+    const ready = coreStats.filled >= MIN_MATERIAL_FIELDS;
     meter.className = "material-meter" + (ready ? " ready" : "");
     meterCount.textContent = `${stats.filled}/${ids.length} 项素材`;
     meterHint.textContent = ready
-      ? `${stats.chars} 字，已可生成`
-      : `至少填写 ${MIN_MATERIAL_FIELDS} 项真实内容后，才能追问或成稿`;
+      ? `核心素材 ${coreStats.filled}/${coreIds.length} 项，已可生成`
+      : `至少先填写 ${MIN_MATERIAL_FIELDS} 项核心素材，才能追问或成稿`;
     if (directButton) directButton.disabled = S.busy || !ready;
     if (followButton) followButton.disabled = S.busy || !ready;
-    gateHint.textContent = ready ? "" : `还差 ${Math.max(0, MIN_MATERIAL_FIELDS - stats.filled)} 项真实内容。先补素材，再让 AI 整理。`;
+    gateHint.textContent = ready ? "" : `还差 ${Math.max(0, MIN_MATERIAL_FIELDS - coreStats.filled)} 项核心素材。先补真实内容，再让 AI 整理。`;
     gateHint.hidden = ready;
   };
   updateMaterialMeter();
@@ -822,9 +825,10 @@ async function doFollowup() {
   if (limitIssue) return toast(limitIssue, true);
   const setupIssues = validateSetupInputs();
   if (setupIssues.length) return toast(setupIssues[0], true);
+  const coreIds = getCoreMaterialIds(S.module, ids, su);
   const badInputs = validateMaterialInputs(ids);
-  if (badInputs.length) return toast(`以下内容未通过校验：${badInputs.slice(0, 3).join("；")}，请认真填写真实经历。`, true);
-  if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，AI 才能有效追问`, true);
+  if (badInputs.length) return toast(`以下内容未通过校验：${badInputs.slice(0, 3).join("；")}，请认真填写真实内容。`, true);
+  if (!hasEnoughMaterial(coreIds)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项核心素材，AI 才能有效追问`, true);
   const followupReadyBad = validateFollowupAnswers();
   if (followupReadyBad.length) return toast(`追问字段有无效内容：${followupReadyBad.slice(0, 3).join("；")}`, true);
 
@@ -833,7 +837,9 @@ async function doFollowup() {
   S.followups = [];
   renderLoading("AI 正在审阅你的素材…", "找出空泛、断裂、缺细节的地方");
 
-  const system = `あなたは日本の大学・大学院出願の専門指導者です。中国人留学生が提供した「${M.name}」の素材を読み、説得力に欠ける点・抽象的すぎる点・論理の飛躍・具体性の不足を見抜きます。学生は中国で学習・制作・研究を重ね、日本でさらに深めようとしている留学生です。追加質問では、中国での具体的な訓練、日語・来日準備、作品集や卒業制作、問題意識がどのように日本での学びにつながるかを引き出してください。本人がまだ書いていない「具体的な事実（固有名詞・実体験・数字・エピソード）」を引き出すための追加質問のみを行います。鉄則：事実を捏造させる質問はしない。中国での経験を低く見せたり、日本を空泛に称賛させたりしない。一般論ではなく、その学生の回答に即した質問をする。`;
+  const system = S.module === "kenkyu"
+    ? `あなたは日本の美術大学院入試に詳しい研究計画書の指導者です。中国人留学生が提供した「${M.name}」の素材を読み、研究テーマ、背景、リサーチクエスチョン、方法、資料、現時点までの成果、期待される成果、ポートフォリオや面接との整合性を確認します。追加質問では、本人がまだ書いていない具体的な制作・調査・先行研究・資料・年次計画だけを引き出してください。鉄則：事実、読んでいない文献、存在しない作品、教授との接触、受賞歴を捏造させない。研究として成立しない広すぎるテーマは、対象・方法・成果に分解して聞く。`
+    : `あなたは日本の大学・大学院出願の専門指導者です。中国人留学生が提供した「${M.name}」の素材を読み、説得力に欠ける点・抽象的すぎる点・論理の飛躍・具体性の不足を見抜きます。学生は中国で学習・制作・研究を重ね、日本でさらに深めようとしている留学生です。追加質問では、留学の必然性、大学・学部の志望理由、制作意欲、入学後の展望、日本語・面接準備が本人の素材から説明できるかを確認してください。鉄則：事実を捏造させる質問はしない。中国での経験を低く見せたり、日本を空泛に称賛させたりしない。一般論ではなく、その学生の回答に即した質問をする。`;
 
   const prompt = buildContext() +
     `\n\n上記をふまえ、より良い${M.name}にするために本人へ尋ねるべき追加質問を 3〜4 個、日本語と中国語で作成してください。各質問にはなぜそれを聞くのか（why）も添えてください。\n` +
@@ -898,9 +904,10 @@ async function doGenerate(skipFollowup) {
   if (limitIssue) return toast(limitIssue, true);
   const setupIssues = validateSetupInputs();
   if (setupIssues.length) return toast(setupIssues[0], true);
+  const coreIds = getCoreMaterialIds(S.module, ids, su);
   const badInputs = validateMaterialInputs(ids);
   if (badInputs.length) return toast(`以下输入未通过校验：${badInputs.slice(0, 3).join("；")}，请先认真补充再成稿。`, true);
-  if (!hasEnoughMaterial(ids)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项素材，才能生成初稿`, true);
+  if (!hasEnoughMaterial(coreIds)) return toast(`至少填 ${MIN_MATERIAL_FIELDS} 项核心素材，才能生成初稿`, true);
   const followupBad = validateFollowupAnswers();
   if (followupBad.length) return toast(`追问回答存在问题：${followupBad.slice(0, 3).join("；")}`, true);
 
@@ -912,7 +919,9 @@ async function doGenerate(skipFollowup) {
     ? su.prompts.map((p, i) => `${i + 1}. ${p}`).join("\n")
     : "（学生未指定设问，按该类文书的标准结构组织）";
 
-  const system = `あなたは日本の大学出願書類の作成を支援するプロの編集者です。学生本人が提供した素材だけを用いて、自然で説得力のある、審査員に響く日本語の${M.name}を作成します。学生は中国人留学生です。中国での学習・制作・研究経験、日語学習や来日準備、作品集・卒業制作・問題意識から、日本で学ぶ理由と志望校での目標へ自然につなげてください。中国での経験を低く見せたり、日本を空泛に称賛したりせず、留学生としての視点を誠実に表現します。鉄則：(1) 素材にない事実・経験・固有名詞・受賞歴・日語資格・教授との接触を捏造しない。情報が足りない箇所は無理に埋めず、自然に簡潔にする。(2)\u300c私は幼い頃から\u300d、\u300c貴校の充実した環境\u300dなどのありがちな決まり文句や、いかにも AI が書いたような常套句を避ける。(3) 指定の字数と設問構成に従う。字数超過しそうな場合は具体性を保ったまま情報を取捨選択する。(4) 一人の学生の個性・声が滲む文章にする。誇張しない。`;
+  const system = S.module === "kenkyu"
+    ? `あなたは日本の美術大学院入試に詳しい研究計画書の編集者です。学生本人が提供した素材だけを用いて、研究テーマ、背景、問い、方法、資料、現時点までの成果、期待される成果、年次計画が論理的につながる日本語の${M.name}を作成します。学生は中国人留学生です。中国での制作・研究経験を土台にしつつ、日本の研究室・制作環境で何を深めるのかを誠実に示してください。鉄則：(1) 素材にない事実、先行研究、作品名、調査実績、受賞歴、教授との接触を捏造しない。(2) 研究として広すぎる表現は、対象・方法・資料・成果に絞って書く。(3) 指定字数に従い、面接で説明できる内容だけを書く。(4) 「社会に貢献したい」などの常套句でごまかさず、計画の実行可能性を優先する。`
+    : `あなたは日本の大学出願書類の作成を支援するプロの編集者です。学生本人が提供した素材だけを用いて、自然で説得力のある、審査員に響く日本語の${M.name}を作成します。学生は中国人留学生です。中国での学習・制作・研究経験、日語学習や来日準備、作品集・卒業制作・問題意識から、留学の必然性、志望校での目標、入学後の展望へ自然につなげてください。中国での経験を低く見せたり、日本を空泛に称賛したりせず、留学生としての視点を誠実に表現します。鉄則：(1) 素材にない事実・経験・固有名詞・受賞歴・日語資格・教授との接触を捏造しない。情報が足りない箇所は無理に埋めず、自然に簡潔にする。(2)\u300c私は幼い頃から\u300d、\u300c貴校の充実した環境\u300dなどのありがちな決まり文句や、いかにも AI が書いたような常套句を避ける。(3) 指定の字数と設問構成に従う。字数超過しそうな場合は具体性を保ったまま情報を取捨選択する。(4) 一人の学生の個性・声が滲む文章にする。誇張しない。`;
 
   let prompt = buildContext();
   if (!skipFollowup && S.followups.length) {

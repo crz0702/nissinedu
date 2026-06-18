@@ -20,15 +20,16 @@ const Q = {
     placeholder: "例：高二开始在…画室系统训练素描、色彩和速写；作品集阶段重点准备了…",
   },
   language_preparation: {
-    id: "language_preparation", label: "日语学习和来日准备", jp: "日本語学習・留学準備",
-    hint: "写真实情况：日语学习时间、能否听懂讲评、是否参加过开放校园/说明会/线上咨询。不确定的成绩不要编。",
-    placeholder: "例：从 2024 年开始学习日语，目前能进行日常沟通，也在练习用日语说明作品意图…",
+    id: "language_preparation", label: "日语 / 面接准备情况", jp: "日本語・面接準備",
+    hint: "写真实情况：JLPT/EJU、日语学习时间、能否说明作品、是否练习过面接或参加过说明会。不确定的成绩不要编。",
+    placeholder: "例：从 2024 年开始学习日语，目前能进行日常沟通，也在练习用日语说明作品主题和制作过程…",
     optional: true,
   },
   cross_cultural_view: {
     id: "cross_cultural_view", label: "中国经历如何影响你的作品 / 问题意识", jp: "中国での経験と問題意識",
-    hint: "可以写城市、家庭、教育、身体经验、社会观察、地方文化。不要贬低中国，也不要空泛比较中日。",
+    hint: "可以写城市、家庭、教育、身体经验、社会观察、地方文化。不要贬低中国，也不要空泛比较中日。没有具体内容可留空。",
     placeholder: "例：我在中国城市更新过程中感受到…，这让我在作品中持续关注…",
+    optional: true,
   },
   why_school: {
     id: "why_school", label: "为什么是这所大学 / 这个学科？", jp: "本学・本学科を志望する理由",
@@ -176,14 +177,16 @@ const KENKYU_Q = {
     hint: "⚠️ 写你确实读过 / 看过的。具体的研究者、著作或作家、作品。", placeholder: "例：…の研究（著者・年）では…。…作家の…シリーズでは…", optional: true },
   k_method: { id: "k_method", label: "研究 / 制作方法、使用资料", jp: "研究方法・資料",
     hint: "打算怎么做：调查、分析、实验、制作流程、用什么材料 / 文献。", placeholder: "例：…を対象に…を分析。制作では…の技法を用い…" },
-  k_originality: { id: "k_originality", label: "本研究的独特性 / 意义", jp: "独自性・意義",
-    hint: "和已有研究比，你的新意在哪。", placeholder: "例：従来は…だったが、本研究は…という点で新しい…" },
+  k_current_result: { id: "k_current_result", label: "目前已有的作品 / 调查 / 研究成果", jp: "現時点までの成果",
+    hint: "写已经完成的作品、调研、论文、试作、展览、访谈、材料实验等。没有成果就写目前已做的准备，不要编。", placeholder: "例：目前已完成…件试作，阅读/整理了…资料，并在毕业创作中尝试了…" },
+  k_originality: { id: "k_originality", label: "期待成果 / 独特性 / 意义", jp: "期待される成果・独自性",
+    hint: "写研究完成后可能形成什么作品、论文、方法或视角；和已有研究/作品相比，新意在哪里。", placeholder: "例：本研究により…を明らかにし、…という制作方法/視点を提示したい…" },
   k_schedule: { id: "k_schedule", label: "大致的研究计划安排", jp: "研究スケジュール",
     hint: "按学期 / 年度粗略列出阶段即可，AI 会帮你排成表述。", placeholder: "例：1 年次…、2 年次…、修了制作…", optional: true },
 };
 
 function kenkyuQuestions() {
-  return ["k_theme", "k_background", "k_question", "k_prior", "k_method", "k_originality", "k_schedule"];
+  return ["k_theme", "k_background", "k_question", "k_method", "k_current_result", "k_prior", "k_originality", "k_schedule"];
 }
 
 // ---- module registry ----
@@ -202,7 +205,7 @@ const ANSWER_GUIDES = {
   },
   language_preparation: {
     weak: "我会努力学习日语。",
-    strong: "写现有日语水平、学习方式、面试/课堂准备，以及入学后如何补足专业表达。"
+    strong: "写现有日语水平、JLPT/EJU或课堂情况、作品说明练习、面接准备，以及入学后如何补足专业表达。"
   },
   cross_cultural_view: {
     weak: "中日文化不同，我会适应。",
@@ -291,6 +294,10 @@ const ANSWER_GUIDES = {
   k_method: {
     weak: "通过调查和制作来研究。",
     strong: "写清调查对象、样本、制作材料、比较方式、评价标准和时间顺序。"
+  },
+  k_current_result: {
+    weak: "目前还没有做什么。",
+    strong: "写已经完成的作品、调研、论文、访谈、材料实验或阅读清单；没有成果时，也写清已经做过的准备。"
   },
   k_originality: {
     weak: "我的研究有创新性。",
