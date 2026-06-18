@@ -13,7 +13,7 @@
     "preview": "wrangler dev"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "devDependencies": {
     "wrangler": "^4.102.0"
