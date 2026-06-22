@@ -13,6 +13,7 @@
 //   LOCAL_LLM_MODEL     - default "local-model"
 //   LOCAL_LLM_MAX_TOKENS - default 1024
 //   LOCAL_LLM_CONTEXT_TOKENS - default 2048
+//   LOCAL_LLM_TIMEOUT_MS - default 240000
 //   DIFY_BASE_URL       - default "https://api.dify.ai/v1"
 //   DIFY_ENDPOINT       - default "chat-messages"; use "completion-messages" for completion apps
 //   GEMINI_MODEL        - default "gemini-2.5-flash"
@@ -22,6 +23,7 @@ const LOCAL_LLM_BASE_URL = (process.env.LOCAL_LLM_BASE_URL || "").replace(/\/+$/
 const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || "local-model";
 const LOCAL_LLM_MAX_TOKENS = Math.max(256, Math.min(8192, Number.parseInt(process.env.LOCAL_LLM_MAX_TOKENS || "1024", 10) || 1024));
 const LOCAL_LLM_CONTEXT_TOKENS = Math.max(1024, Math.min(131072, Number.parseInt(process.env.LOCAL_LLM_CONTEXT_TOKENS || "2048", 10) || 2048));
+const LOCAL_LLM_TIMEOUT_MS = Math.max(15000, Math.min(290000, Number.parseInt(process.env.LOCAL_LLM_TIMEOUT_MS || "240000", 10) || 240000));
 const DIFY_BASE_URL = (process.env.DIFY_BASE_URL || "https://api.dify.ai/v1").replace(/\/+$/, "");
 const DIFY_ENDPOINT = process.env.DIFY_ENDPOINT || "chat-messages";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -104,7 +106,7 @@ function extractDifyAnswer(raw) {
 async function callLocalOpenAI({ system, prompt }) {
   if (!LOCAL_LLM_BASE_URL) throw new Error("LOCAL_LLM_BASE_URL missing");
 
-  const to = withTimeout(60000);
+  const to = withTimeout(LOCAL_LLM_TIMEOUT_MS);
   const headers = { "Content-Type": "application/json" };
   if (process.env.LOCAL_LLM_API_KEY) headers.Authorization = `Bearer ${process.env.LOCAL_LLM_API_KEY}`;
   const promptChars = charLen(`${system || ""}\n${prompt || ""}`);
