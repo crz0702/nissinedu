@@ -1,14 +1,20 @@
 // Vercel Serverless Function (Node 18+/22 runtime, native fetch).
 // Thin proxy that keeps API keys server-side.
-// Primary: Google Gemini. Fallback: Anthropic Claude.
+// Primary: Dify App API when DIFY_API_KEY is configured.
+// Fallbacks: Google Gemini, then Anthropic Claude.
 //
 // Required env vars (set in Vercel project settings):
-//   GEMINI_API_KEY      - Google AI Studio key
-//   ANTHROPIC_API_KEY   - Anthropic key (used only if Gemini fails)
+//   DIFY_API_KEY        - Dify App API key, optional primary provider
+//   GEMINI_API_KEY      - Google AI Studio key, fallback provider
+//   ANTHROPIC_API_KEY   - Anthropic key, fallback provider
 // Optional:
+//   DIFY_BASE_URL       - default "https://api.dify.ai/v1"
+//   DIFY_ENDPOINT       - default "chat-messages"; use "completion-messages" for completion apps
 //   GEMINI_MODEL        - default "gemini-2.5-flash"
 //   ANTHROPIC_MODEL     - default "claude-3-5-sonnet-20241022"
 
+const DIFY_BASE_URL = (process.env.DIFY_BASE_URL || "https://api.dify.ai/v1").replace(/\/+$/, "");
+const DIFY_ENDPOINT = process.env.DIFY_ENDPOINT || "chat-messages";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
 const MAX_TEXT_BYTES = 100_000;
@@ -51,6 +57,78 @@ function validateSchema(schema) {
   if (typeof schema !== "object" || Array.isArray(schema)) return "Invalid 'schema'";
   if (JSON.stringify(schema).length > MAX_SCHEMA_BYTES) return "Schema too large";
   return null;
+}
+
+function extractDifyAnswer(raw) {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) throw new Error("Dify returned empty response");
+
+  try {
+    const data = JSON.parse(trimmed);
+    const answer = data?.answer || data?.text || data?.result || data?.data?.answer || data?.data?.outputs?.answer;
+    if (answer) return String(answer);
+  } catch {
+    // Some self-hosted/chatflow Dify versions may return SSE-like payloads even in blocking mode.
+  }
+
+  const chunks = [];
+  for (const line of trimmed.split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      const event = JSON.parse(payload);
+      const answer = event?.answer || event?.data?.answer || event?.data?.outputs?.answer;
+      if (answer) chunks.push(String(answer));
+    } catch {
+      // Ignore non-JSON SSE comments/pings.
+    }
+  }
+  if (chunks.length) return chunks.join("");
+  return trimmed;
+}
+
+async function callDify({ system, prompt }) {
+  const key = process.env.DIFY_API_KEY;
+  if (!key) throw new Error("DIFY_API_KEY missing");
+
+  const to = withTimeout(60000);
+  const query = `${system ? `【System】\n${system}\n\n` : ""}【User】\n${prompt}`;
+  const endpoint = DIFY_ENDPOINT.replace(/^\/+/, "");
+  const body = endpoint === "completion-messages"
+    ? {
+        inputs: { prompt: query, query, text: query },
+        response_mode: "blocking",
+        user: "nissin-generator",
+      }
+    : {
+        inputs: {},
+        query,
+        response_mode: "blocking",
+        conversation_id: "",
+        user: "nissin-generator",
+      };
+
+  let resp;
+  try {
+    resp = await fetch(`${DIFY_BASE_URL}/${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify(body),
+      signal: to.signal,
+    });
+  } finally {
+    to.done();
+  }
+
+  const raw = await resp.text().catch(() => "");
+  if (!resp.ok) {
+    throw new Error(`Dify ${resp.status}: ${raw.slice(0, 300)}`);
+  }
+  return extractDifyAnswer(raw);
 }
 
 async function callGemini({ system, prompt, schema }) {
@@ -174,6 +252,16 @@ export default async function handler(req, res) {
   }
 
   const errors = [];
+  if (process.env.DIFY_API_KEY) {
+    try {
+      const text = await callDify({ system, prompt, schema });
+      res.status(200).json({ text, provider: "dify" });
+      return;
+    } catch (e) {
+      errors.push(`dify: ${toErrorText(e, "60s")}`);
+    }
+  }
+
   try {
     const text = await callGemini({ system, prompt, schema });
     res.status(200).json({ text, provider: "gemini" });
