@@ -8,11 +8,16 @@
 //   GEMINI_API_KEY      - Google AI Studio key, fallback provider
 //   ANTHROPIC_API_KEY   - Anthropic key, fallback provider
 // Optional:
+//   LOCAL_LLM_BASE_URL  - OpenAI-compatible local/gateway base URL, e.g. "https://xxx.trycloudflare.com/v1"
+//   LOCAL_LLM_API_KEY   - optional key for the OpenAI-compatible local/gateway API
+//   LOCAL_LLM_MODEL     - default "local-model"
 //   DIFY_BASE_URL       - default "https://api.dify.ai/v1"
 //   DIFY_ENDPOINT       - default "chat-messages"; use "completion-messages" for completion apps
 //   GEMINI_MODEL        - default "gemini-2.5-flash"
 //   ANTHROPIC_MODEL     - default "claude-3-5-sonnet-20241022"
 
+const LOCAL_LLM_BASE_URL = (process.env.LOCAL_LLM_BASE_URL || "").replace(/\/+$/, "");
+const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || "local-model";
 const DIFY_BASE_URL = (process.env.DIFY_BASE_URL || "https://api.dify.ai/v1").replace(/\/+$/, "");
 const DIFY_ENDPOINT = process.env.DIFY_ENDPOINT || "chat-messages";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -86,6 +91,49 @@ function extractDifyAnswer(raw) {
   }
   if (chunks.length) return chunks.join("");
   return trimmed;
+}
+
+async function callLocalOpenAI({ system, prompt }) {
+  if (!LOCAL_LLM_BASE_URL) throw new Error("LOCAL_LLM_BASE_URL missing");
+
+  const to = withTimeout(60000);
+  const headers = { "Content-Type": "application/json" };
+  if (process.env.LOCAL_LLM_API_KEY) headers.Authorization = `Bearer ${process.env.LOCAL_LLM_API_KEY}`;
+
+  let resp;
+  try {
+    resp = await fetch(`${LOCAL_LLM_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: LOCAL_LLM_MODEL,
+        messages: [
+          ...(system ? [{ role: "system", content: system }] : []),
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 8192,
+        stream: false,
+      }),
+      signal: to.signal,
+    });
+  } finally {
+    to.done();
+  }
+
+  const raw = await resp.text().catch(() => "");
+  if (!resp.ok) {
+    throw new Error(`Local LLM ${resp.status}: ${raw.slice(0, 300)}`);
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || data?.text;
+  if (!text) throw new Error("Local LLM returned empty response");
+  return text;
 }
 
 async function callDify({ system, prompt }) {
@@ -252,6 +300,16 @@ export default async function handler(req, res) {
   }
 
   const errors = [];
+  if (LOCAL_LLM_BASE_URL) {
+    try {
+      const text = await callLocalOpenAI({ system, prompt, schema });
+      res.status(200).json({ text, provider: "local-openai" });
+      return;
+    } catch (e) {
+      errors.push(`local-openai: ${toErrorText(e, "60s")}`);
+    }
+  }
+
   if (process.env.DIFY_API_KEY) {
     try {
       const text = await callDify({ system, prompt, schema });
