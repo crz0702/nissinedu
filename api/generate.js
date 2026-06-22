@@ -11,6 +11,7 @@
 //   LOCAL_LLM_BASE_URL  - OpenAI-compatible local/gateway base URL, e.g. "https://xxx.trycloudflare.com/v1"
 //   LOCAL_LLM_API_KEY   - optional key for the OpenAI-compatible local/gateway API
 //   LOCAL_LLM_MODEL     - default "local-model"
+//   LOCAL_LLM_MAX_TOKENS - default 2048
 //   DIFY_BASE_URL       - default "https://api.dify.ai/v1"
 //   DIFY_ENDPOINT       - default "chat-messages"; use "completion-messages" for completion apps
 //   GEMINI_MODEL        - default "gemini-2.5-flash"
@@ -18,6 +19,7 @@
 
 const LOCAL_LLM_BASE_URL = (process.env.LOCAL_LLM_BASE_URL || "").replace(/\/+$/, "");
 const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || "local-model";
+const LOCAL_LLM_MAX_TOKENS = Math.max(256, Math.min(8192, Number.parseInt(process.env.LOCAL_LLM_MAX_TOKENS || "2048", 10) || 2048));
 const DIFY_BASE_URL = (process.env.DIFY_BASE_URL || "https://api.dify.ai/v1").replace(/\/+$/, "");
 const DIFY_ENDPOINT = process.env.DIFY_ENDPOINT || "chat-messages";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -112,7 +114,7 @@ async function callLocalOpenAI({ system, prompt }) {
           { role: "user", content: prompt },
         ],
         temperature: 0.7,
-        max_tokens: 8192,
+        max_tokens: LOCAL_LLM_MAX_TOKENS,
         stream: false,
       }),
       signal: to.signal,
