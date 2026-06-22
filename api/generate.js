@@ -11,7 +11,8 @@
 //   LOCAL_LLM_BASE_URL  - OpenAI-compatible local/gateway base URL, e.g. "https://xxx.trycloudflare.com/v1"
 //   LOCAL_LLM_API_KEY   - optional key for the OpenAI-compatible local/gateway API
 //   LOCAL_LLM_MODEL     - default "local-model"
-//   LOCAL_LLM_MAX_TOKENS - default 2048
+//   LOCAL_LLM_MAX_TOKENS - default 1024
+//   LOCAL_LLM_CONTEXT_TOKENS - default 2048
 //   DIFY_BASE_URL       - default "https://api.dify.ai/v1"
 //   DIFY_ENDPOINT       - default "chat-messages"; use "completion-messages" for completion apps
 //   GEMINI_MODEL        - default "gemini-2.5-flash"
@@ -19,7 +20,8 @@
 
 const LOCAL_LLM_BASE_URL = (process.env.LOCAL_LLM_BASE_URL || "").replace(/\/+$/, "");
 const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || "local-model";
-const LOCAL_LLM_MAX_TOKENS = Math.max(256, Math.min(8192, Number.parseInt(process.env.LOCAL_LLM_MAX_TOKENS || "2048", 10) || 2048));
+const LOCAL_LLM_MAX_TOKENS = Math.max(256, Math.min(8192, Number.parseInt(process.env.LOCAL_LLM_MAX_TOKENS || "1024", 10) || 1024));
+const LOCAL_LLM_CONTEXT_TOKENS = Math.max(1024, Math.min(131072, Number.parseInt(process.env.LOCAL_LLM_CONTEXT_TOKENS || "2048", 10) || 2048));
 const DIFY_BASE_URL = (process.env.DIFY_BASE_URL || "https://api.dify.ai/v1").replace(/\/+$/, "");
 const DIFY_ENDPOINT = process.env.DIFY_ENDPOINT || "chat-messages";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -38,6 +40,10 @@ function withTimeout(ms) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function charLen(value) {
+  return Array.from(value || "").length;
 }
 
 function shouldRetryProviderStatus(status) {
@@ -101,6 +107,13 @@ async function callLocalOpenAI({ system, prompt }) {
   const to = withTimeout(60000);
   const headers = { "Content-Type": "application/json" };
   if (process.env.LOCAL_LLM_API_KEY) headers.Authorization = `Bearer ${process.env.LOCAL_LLM_API_KEY}`;
+  const promptChars = charLen(`${system || ""}\n${prompt || ""}`);
+  const estimatedPromptTokens = Math.ceil(promptChars / 1.5);
+  const availableOutputTokens = LOCAL_LLM_CONTEXT_TOKENS - estimatedPromptTokens - 64;
+  if (availableOutputTokens < 256) {
+    throw new Error(`Local LLM context too small: estimated prompt ${estimatedPromptTokens} tokens, context ${LOCAL_LLM_CONTEXT_TOKENS}`);
+  }
+  const maxTokens = Math.max(256, Math.min(LOCAL_LLM_MAX_TOKENS, availableOutputTokens));
 
   let resp;
   try {
@@ -114,7 +127,7 @@ async function callLocalOpenAI({ system, prompt }) {
           { role: "user", content: prompt },
         ],
         temperature: 0.7,
-        max_tokens: LOCAL_LLM_MAX_TOKENS,
+        max_tokens: maxTokens,
         stream: false,
       }),
       signal: to.signal,
