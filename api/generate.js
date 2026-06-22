@@ -123,8 +123,8 @@ async function callLocalOpenAI({ system, prompt }) {
       body: JSON.stringify({
         model: LOCAL_LLM_MODEL,
         messages: [
-          ...(system ? [{ role: "system", content: system }] : []),
-          { role: "user", content: prompt },
+          ...(system ? [{ role: "system", content: `${system}\nDo not include reasoning, chain-of-thought, or <think> blocks.` }] : []),
+          { role: "user", content: `/no_think\n${prompt}` },
         ],
         temperature: 0.7,
         max_tokens: maxTokens,
